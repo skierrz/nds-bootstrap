@@ -37,6 +37,7 @@
 #include <nds/timers.h>
 #include <nds/ipc.h>
 #include <nds/system.h>
+#include <nds/input.h>
 
 #include "common.h"
 #include "igm_text.h"
@@ -64,6 +65,7 @@ volatile bool topScreenFadedIn = false;
 volatile bool bottomScreenFadedIn = false;
 volatile bool esrbImageLoaded = false;
 volatile int arm9_stateFlag = ARM9_BOOT;
+static int placardFrames = 0; // DScheevos placard: frames it still stays up (below 0: skipped)
 
 void transferToArm7(int slot) {
 	*((vu8*)(REG_MBK_CACHE_START+slot)) |= 0x1;
@@ -143,6 +145,17 @@ void fadeOut(u8 screens) {
 			SetBrightness(1, i);
 		}
 		while (REG_VCOUNT != 191);
+		while (REG_VCOUNT == 191);
+	}
+}
+
+// DScheevos placard: one frame less per VBlank; A, B or START ends it
+#define PLACARD_KEYS (KEY_A | KEY_B | KEY_START)
+static void __attribute__((noinline)) placardTick(void) {
+	if ((REG_KEYINPUT & PLACARD_KEYS) != PLACARD_KEYS) {
+		placardFrames = -60*2; // then wait up to 2 s for the key to be let go
+	} else if (REG_VCOUNT == 191) {
+		placardFrames--;
 		while (REG_VCOUNT == 191);
 	}
 }
@@ -276,7 +289,13 @@ void arm9_main(void) {
 	// Set ARM9 state to ready and wait for it to change again
 	arm9_stateFlag = ARM9_READY;
 	while (arm9_stateFlag != ARM9_BOOTBIN) {
+		if (placardFrames > 0) {
+			placardTick();
+		}
 		if (arm9_stateFlag == ARM9_SCRNCLR) {
+			while (placardFrames > 0) {
+				placardTick();
+			}
 			if (topScreenFadedIn || bottomScreenFadedIn) {
 				u8 screens = 0;
 				if (topScreenFadedIn) {
@@ -289,6 +308,10 @@ void arm9_main(void) {
 				dmaFill9(0, BG_PALETTE, 2*1024);
 				dmaFill9(0, VRAM_A, 0x18000);		// Bank A
 				dmaFill9(0, BG_GFX_SUB, 0xC000);		// Bank H-I
+			}
+			// so the game doesn't see the placard's skip key as a new press
+			for (; placardFrames < 0 && (REG_KEYINPUT & PLACARD_KEYS) != PLACARD_KEYS; placardFrames++) {
+				waitFrames(1);
 			}
 			REG_DISPSTAT = 0;
 			VRAM_A_CR = 0;
@@ -352,6 +375,17 @@ void arm9_main(void) {
 			int (*dscheevosInit)(const void*) = *(int (**)(const void*))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_INIT);
 			dscheevosInit((const void*)DSCHEEVOS_SESSION);
 			arm9_stateFlag = ARM9_READY;
+		}
+		if (arm9_stateFlag == ARM9_DSCHEEVOS_PLACARD) {
+			// DScheevos: the ARM7 drew the session card where the ESRB screen goes
+			arm9_esrbScreen();
+			arm9_stateFlag = ARM9_READY; // the ARM7 goes on loading during the fade-in
+			placardFrames = 90; // 1.5 s, including the fade-in
+			if (!topScreenFadedIn) {
+				fadeIn(BIT(0));
+				topScreenFadedIn = true;
+				placardFrames -= 26;
+			}
 		}
 		if (arm9_stateFlag == ARM9_INITMBK) {
 			initMBKARM9_dsiMode();

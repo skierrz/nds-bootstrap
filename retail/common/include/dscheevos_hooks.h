@@ -36,12 +36,20 @@
 #define DSCHEEVOS_H_JOURNAL       0x34  // DScheevosJournal*, kept current in RAM (the ARM7 reads it directly)
 #define DSCHEEVOS_H_NOTIFY        0x40  // unlock count, kept in RAM by the ARM9
 #define DSCHEEVOS_H_NETRING       0x44  // the module's frame ring for the ARM7 SDIO shim (dscm_shim.h), 0 = none
+#define DSCHEEVOS_H_CUES          0x48  // LED cues, kept in RAM by the ARM9 (DSCHEEVOS_CUE_*)
+
+// header word 0x48: counters wrap, act on a change
+#define DSCHEEVOS_CUE_PROGRESS_MASK     0x000000FF  // measured progress updates
+#define DSCHEEVOS_CUE_LEADERBOARD_MASK  0x0000FF00  // leaderboard attempts started, failed or submitted
+#define DSCHEEVOS_CUE_LEADERBOARD_SHIFT 8
+#define DSCHEEVOS_CUE_CHALLENGE         0x00010000  // a challenge indicator is showing
 
 // session file words
 #define DSCHEEVOS_S_SIZE          0x04  // sizeof(dscm_boot_t)
 #define DSCHEEVOS_S_FILE_SIZE     0x08
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
 #define DSCHEEVOS_S_HARDCORE      0x1CD // u8
+#define DSCHEEVOS_S_FLAGS         0x1CE // u8: DSCHEEVOS_BOOT_*
 #define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
 #define DSCHEEVOS_S_AP_SSID       0x210 // char[32]: the access point the launcher joined
 #define DSCHEEVOS_S_AP_SSID_LEN   0x230 // u8
@@ -50,6 +58,7 @@
 #define DSCHEEVOS_S_PMK           0x23C // u8[32], filled here in RAM only
 #define DSCHEEVOS_S_BOOT_SIZE     0x25C
 #define DSCHEEVOS_AP_WPA2         3
+#define DSCHEEVOS_BOOT_SPECTATOR  0x01  // evaluate and show, send nothing
 
 // valueBits flag in both ce7 and ce9: hooks are live
 #define DSCHEEVOS_VALUEBIT        BIT(28)

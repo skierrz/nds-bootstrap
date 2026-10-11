@@ -7,6 +7,7 @@
  *
  * Only DS (NTR-mode) games booted from SD use this.
  */
+#include <stddef.h>
 #include <string.h>
 #include <nds/ndstypes.h>
 #include <nds/memory.h>
@@ -19,12 +20,16 @@
 #include "common.h"
 #include "value_bits.h"
 #include "dscheevos_hooks.h"
+#include "locations.h"
+#include "igm_text.h"
 
 extern void readFirmware(u32 address, void* destination, u32 size); // libnds/firmware.c
 extern u32 dscheevosModuleCluster;
 extern u32 dscheevosSessionCluster;
 extern u32 dscheevosPendingCluster;
 extern u32 iUncompressedSize;
+extern u32 pageFileCluster;
+extern u8 bootstrapOnFlashcard;
 
 bool dscheevosWanted(void) {
 	return dscheevosModuleCluster && dscheevosSessionCluster && !dsiModeConfirmed && !isDSiWare;
@@ -110,6 +115,98 @@ static void fillPmk(u8* session) {
 	toncset(slot, 0, 0x200);
 }
 
+// The session card shown before the game starts (ARM9_DSCHEEVOS_PLACARD):
+// drawn here into the ESRB screen's buffer, with the in-game menu's font,
+// then shown by the ARM9 on the top screen until the screen is cleared.
+#define PLACARD ((u16*)IMAGES_LOCATION)
+#define PLACARD_BG     (BIT(15) | 0x1862)
+#define PLACARD_GOLD   (BIT(15) | 0x131F)
+#define PLACARD_WHITE  0xFFFF
+#define PLACARD_GRAY   (BIT(15) | 0x5294)
+#define PLACARD_RED    (BIT(15) | 0x18DF)
+#define PLACARD_BLUE   (BIT(15) | 0x7F10)
+#define PLACARD_YELLOW (BIT(15) | 0x2BFF)
+static u8 placardFont[128 * 8]; // the font's ASCII half: 8x8, 1 bit per pixel
+
+// One centered line of at most 32 characters. As in the in-game menu's
+// fit(), UTF-8 and other non-ASCII characters become '?'
+static void placardText(int row, const char* in, u16 color) {
+	u8 line[32];
+	int n = 0;
+	while (*in && n < 32) {
+		const u8 c = (u8)*in++;
+		if (c >= 0x80 && c < 0xC0) {
+			continue; // UTF-8 continuation byte
+		}
+		line[n++] = (c >= 0x20 && c < 0x7F) ? c : '?';
+	}
+	u16* dst = PLACARD + row * 8 * 256 + (256 - n * 8) / 2;
+	for (int i = 0; i < n; i++, dst += 8) {
+		const u8* glyph = placardFont + line[i] * 8;
+		for (int y = 0; y < 8; y++) {
+			for (int x = 0; x < 8; x++) {
+				if (glyph[y] & BIT(x)) {
+					dst[y * 256 + x] = color;
+				}
+			}
+		}
+	}
+}
+
+static char* placardNum(char* p, u32 val) {
+	char digits[10];
+	int n = 0;
+	do {
+		digits[n++] = '0' + val % 10;
+		val /= 10;
+	} while (val);
+	while (n) {
+		*p++ = digits[--n];
+	}
+	return p;
+}
+
+static char* placardStr(char* p, const char* s) {
+	while (*s) {
+		*p++ = *s++;
+	}
+	return p;
+}
+
+static void placard(void) {
+	const DScheevosStatus* s = *(const DScheevosStatus**)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_STATUS);
+	if ((u32)s < DSCHEEVOS_LOCATION || (u32)s + sizeof(DScheevosStatus) > DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE
+	 || !s->active || s->error) {
+		return;
+	}
+	aFile file;
+	getFileFromCluster(&file, pageFileCluster, bootstrapOnFlashcard);
+	fileRead((char*)placardFont, &file, offsetof(struct IgmText, font), sizeof(placardFont));
+
+	toncset16(PLACARD, PLACARD_BG, 256*192);
+	placardText(6, "RetroAchievements", PLACARD_GOLD);
+	placardText(9, s->gameTitle, PLACARD_WHITE);
+	placardText(12, s->hardcore ? "HARDCORE" : "Softcore", s->hardcore ? PLACARD_RED : PLACARD_BLUE);
+	if (s->hardcore == DSCHEEVOS_HARDCORE_REFUSED) {
+		placardText(13, "Rules on, RA counts as softcore", PLACARD_GRAY);
+	}
+	char line[48];
+	char* p = placardNum(line, s->achievementsUnlocked);
+	*p++ = '/';
+	p = placardStr(placardNum(p, s->achievements), " achievements, ");
+	p = placardNum(p, s->pointsUnlocked);
+	*p++ = '/';
+	p = placardStr(placardNum(p, s->points), " points");
+	*p = 0;
+	placardText(15, line, PLACARD_WHITE);
+	if (*(u8*)(DSCHEEVOS_SESSION + DSCHEEVOS_S_FLAGS) & DSCHEEVOS_BOOT_SPECTATOR) {
+		placardText(17, "Spectator: nothing is sent", PLACARD_YELLOW);
+	}
+
+	arm9_stateFlag = ARM9_DSCHEEVOS_PLACARD;
+	while (arm9_stateFlag != ARM9_READY);
+}
+
 static void disable(const char* why) {
 	*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_MAGIC) = 0;
 	dbg_printf("DScheevos off: ");
@@ -159,9 +256,11 @@ void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* 
 	ce7->valueBits |= DSCHEEVOS_VALUEBIT;
 	ce9->valueBits |= DSCHEEVOS_VALUEBIT;
 
+	while (arm9_stateFlag != ARM9_READY); // an ESRB screen may still be up
 	arm9_stateFlag = ARM9_DSCHEEVOS_INIT;
 	while (arm9_stateFlag != ARM9_READY);
 	dbg_printf("DScheevos: module ready\n");
+	placard();
 	if (!dscheevosPendingCluster) {
 		dbg_printf("DScheevos: no pending.bin, unsent unlocks won't be kept\n");
 	}

@@ -63,6 +63,7 @@
 #define ARM9_WRAMONARM7 11
 #define ARM9_WRAMONARM9 12
 #define ARM9_DSCHEEVOS_INIT 13
+#define ARM9_DSCHEEVOS_PLACARD 14
 //};
 
 extern u32* arm9executeAddress;

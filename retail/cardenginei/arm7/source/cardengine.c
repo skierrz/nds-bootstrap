@@ -1826,10 +1826,23 @@ void myIrqHandlerFIFO(void) {
 
 #ifndef TWLSDK
 // DScheevos: count the VBlank, then ask the ARM9 to snapshot achievement
-// memory. On a new unlock, blink the DSi's Wi-Fi LED three times.
+// memory. Then cue on the DSi's Wi-Fi LED: 3 blinks per unlock, 2 per
+// leaderboard attempt started or finished, 1 for measured progress, and
+// held while a challenge indicator shows. A blink or the hold is the
+// opposite of the LED's normal state: lit if it is normally off, dark if
+// it is normally on (as with wireless enabled). Patterns queue, unlocks
+// first; progress keeps at most one waiting, as it is a level, not an
+// event. One I2C access per VBlank at most; the other BPTWL[30h] bits keep
+// the value read when the cues took the LED. Off while nds-bootstrap's own
+// ROM-read option drives the Wi-Fi LED.
 static u32 dscheevosNotifySeen = 0;
-static int dscheevosBlink = 0;
-static u8 dscheevosLed = 0;
+static u32 dscheevosCuesSeen = 0;
+static u16 dscheevosQueued[3] = {0}; // unlock, leaderboard, progress patterns waiting
+static u8 dscheevosBlinks = 0; // pattern playing: blinks in it
+static u8 dscheevosTick = 0; // frames into it
+static bool dscheevosLedOwned = false;
+static u8 dscheevosLed = 0; // BPTWL[30h] before the cues took it
+static u8 dscheevosLedNow = 0;
 
 // DScheevos network: move HTC frames between the Atheros mailbox and
 // the module's rings (shim_shared_t, pointer in the module header). The chip
@@ -1838,23 +1851,22 @@ static u8 dscheevosLed = 0;
 static u8 dscheevosNetAttached = 0;
 static u8 dscheevosNtrSelected = 0;
 
-static void dscheevosNetPoll(void) {
+// The game is using its own (DS-mode) wireless once the DS Wi-Fi is
+// powered (POWCNT2 bit 1; many games set it at boot without using it)
+// and its RF clock is on (W_POWER_US bit 0 = 0).
+static void dscheevosNetPoll(const u16 powcnt2, const u16 powerUs, const bool gameWifi) {
 	shim_shared_t* ring = *(shim_shared_t* volatile*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NETRING);
 	if (!ring || ring->magic != SHIM_MAGIC) {
 		return;
 	}
-	// The game is using its own (DS-mode) wireless once the DS Wi-Fi is
-	// powered (POWCNT2 bit 1; many games set it at boot without using it)
-	// and its RF clock is on (W_POWER_US bit 0 = 0). Then select DS-mode
-	// Wi-Fi (GPIO_WIFI bit 8) and leave the DSi chip alone until it's off.
+	// While the game's wireless is on, select DS-mode Wi-Fi (GPIO_WIFI bit 8)
+	// and leave the DSi chip alone until it's off.
 	// On DWM-W024 boards the DS Wi-Fi only works with DS mode selected, so a
 	// game's local wireless there may need "Send unlocks during play" off in
 	// the launcher (real hardware still to be tested).
-	const u16 powcnt2 = REG_POWERCNT;
-	const u16 powerUs = (powcnt2 & BIT(1)) ? *(vu16*)0x04808036 : 1;
 	ring->stats.ntr_powcnt2 = powcnt2;
 	ring->stats.ntr_power_us = powerUs;
-	if ((powcnt2 & BIT(1)) && !(powerUs & BIT(0))) {
+	if (gameWifi) {
 		if (!(*(vu16*)0x04004C04 & BIT(8))) {
 			*(vu16*)0x04004C04 |= BIT(8);
 			dscheevosNtrSelected = 1;
@@ -1885,28 +1897,91 @@ static void dscheevosNetPoll(void) {
 	}
 }
 
+// Give the LED back in its normal state: when the cues stop, and before
+// the in-game menu, a reset or a return to the loader.
+static void dscheevosLedRelease(void) {
+	if (dscheevosLedOwned) {
+		if (dscheevosLedNow != dscheevosLed) {
+			i2cWriteRegister(0x4A, 0x30, dscheevosLed);
+		}
+		dscheevosLedOwned = false;
+	}
+}
+
+static void dscheevosLedCues(const bool gameWifi) {
+	const u32 notify = *(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NOTIFY);
+	const u32 cues = *(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_CUES);
+	// each counter on its own, so one wrapping doesn't borrow from the other
+	dscheevosQueued[0] += notify - dscheevosNotifySeen;
+	dscheevosQueued[1] += ((cues >> DSCHEEVOS_CUE_LEADERBOARD_SHIFT) - (dscheevosCuesSeen >> DSCHEEVOS_CUE_LEADERBOARD_SHIFT)) & 0xFF;
+	if ((cues - dscheevosCuesSeen) & DSCHEEVOS_CUE_PROGRESS_MASK) {
+		dscheevosQueued[2] = 1;
+	}
+	dscheevosNotifySeen = notify;
+	dscheevosCuesSeen = cues;
+
+	// A pattern: 6 frames normal, then 6 blinked and 6 normal per blink,
+	// then 12 normal. While the game's own wireless is on, the LED is the
+	// game's: hand it back and replay the pattern from its start afterwards.
+	bool show = !gameWifi;
+	u8 led = dscheevosLed;
+	if (gameWifi) {
+		dscheevosTick = 0;
+	} else {
+		if (!dscheevosBlinks) {
+			for (int i = 0; i < 3; i++) {
+				if (dscheevosQueued[i]) {
+					dscheevosQueued[i]--;
+					dscheevosBlinks = 3 - i;
+					dscheevosTick = 0;
+					break;
+				}
+			}
+		}
+		if (dscheevosBlinks) {
+			const int t = dscheevosTick - 6;
+			if (t >= 0 && t < dscheevosBlinks*12 && t % 12 < 6) {
+				led ^= BIT(0);
+			}
+			if (++dscheevosTick >= 6 + dscheevosBlinks*12 + 12) {
+				dscheevosBlinks = 0;
+			}
+		} else if (cues & DSCHEEVOS_CUE_CHALLENGE) {
+			led ^= BIT(0);
+		} else {
+			show = false;
+		}
+	}
+
+	if (!show) {
+		dscheevosLedRelease();
+		return;
+	}
+	if (!dscheevosLedOwned) {
+		// the read is this VBlank's I2C access; writes start on the next
+		dscheevosLed = i2cReadRegister(0x4A, 0x30);
+		dscheevosLedNow = dscheevosLed;
+		dscheevosLedOwned = true;
+		return;
+	}
+	if (led != dscheevosLedNow) {
+		i2cWriteRegister(0x4A, 0x30, led);
+		dscheevosLedNow = led;
+	}
+}
+
 static void dscheevosVBlank(void) {
 	(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
 	IPC_SendSync(0xA);
-	dscheevosNetPoll();
+	const u16 powcnt2 = REG_POWERCNT;
+	const u16 powerUs = (powcnt2 & BIT(1)) ? *(vu16*)0x04808036 : 1;
+	const bool gameWifi = (powcnt2 & BIT(1)) && !(powerUs & BIT(0));
+	dscheevosNetPoll(powcnt2, powerUs, gameWifi);
 
-	if ((valueBits & i2cBricked) || consoleModel >= 2) {
+	if ((valueBits & i2cBricked) || consoleModel >= 2 || romRead_LED == 1 || dmaRomRead_LED == 1) {
 		return;
 	}
-	const u32 notify = *(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NOTIFY);
-	if (notify != dscheevosNotifySeen) {
-		dscheevosNotifySeen = notify;
-		if (dscheevosBlink == 0) {
-			dscheevosLed = i2cReadRegister(0x4A, 0x30);
-		}
-		dscheevosBlink = 6*6;
-	}
-	if (dscheevosBlink > 0) {
-		dscheevosBlink--;
-		if (dscheevosBlink % 6 == 0) {
-			i2cWriteRegister(0x4A, 0x30, (dscheevosBlink == 0) ? dscheevosLed : (((dscheevosBlink / 6) & 1) ? 0x13 : 0x12));
-		}
-	}
+	dscheevosLedCues(gameWifi);
 }
 
 // DScheevos: copy the module's offline journal (unlocks and leaderboard
@@ -2060,6 +2135,8 @@ void myIrqHandlerVBlank(void) {
 #ifdef TWLSDK
 		igmText = (struct IgmText *)INGAME_MENU_LOCATION;
 		i2cWriteRegister(0x4A, 0x12, 0x00);
+#else
+		dscheevosLedRelease(); // DScheevos: the menu may reset or leave the game
 #endif
 		inGameMenu();
 #ifdef TWLSDK
@@ -2111,6 +2188,7 @@ void myIrqHandlerVBlank(void) {
 				dscheevosJournalWrite(true); // DScheevos: back to the menu, the session ends
 				unlockMutex(&saveMutex);
 			}
+			dscheevosLedRelease();
 			returnToLoader(false);
 #endif
 		}
@@ -2141,6 +2219,7 @@ void myIrqHandlerVBlank(void) {
 			dscheevosJournalWrite(true); // DScheevos: the game is resetting, its ARM9 waits
 			unlockMutex(&saveMutex);
 		}
+		dscheevosLedRelease();
 		#endif
 		reset(false);
 	}
@@ -2153,6 +2232,7 @@ void myIrqHandlerVBlank(void) {
 					int oldIME = enterCriticalSection();
 					#ifndef TWLSDK
 					dscheevosJournalWrite(true); // DScheevos: before the soft reset
+					dscheevosLedRelease();
 					#endif
 					forceGameReboot();
 					leaveCriticalSection(oldIME);

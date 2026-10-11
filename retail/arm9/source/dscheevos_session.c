@@ -28,7 +28,7 @@ void dscheevosFindSession(configuration* conf) {
 		return;
 	}
 
-	u32 head[(DSCHEEVOS_S_ROM_PATH + 256) / 4];
+	u32 head[(DSCHEEVOS_S_HARDCORE + 4) / 4];
 	FILE* f = fopen(DSCHEEVOS_DIR "session.bin", "rb");
 	if (!f) {
 		return;
@@ -48,4 +48,7 @@ void dscheevosFindSession(configuration* conf) {
 	}
 	conf->dscheevosModuleCluster = stModule.st_ino;
 	conf->dscheevosSessionCluster = stSession.st_ino;
+	if (((const u8*)head)[DSCHEEVOS_S_HARDCORE]) {
+		conf->cheatSize = 0; // hardcore: no cheats (AP-fix patches still apply)
+	}
 }

@@ -25,6 +25,7 @@
 #include <nds/ipc.h>
 #include <nds/timers.h>
 #include <nds/memory.h> // tNDSHeader
+#include "dscheevos_hooks.h"
 #include "tonccpy.h"
 #include "nds_header.h"
 #include "cardengine.h"
@@ -173,6 +174,12 @@ void initialize(void) {
 extern void resetMpu(void);
 
 void reset(u32 param, u32 tid2) {
+#ifndef TWLSDK
+	if (ce9->valueBits & DSCHEEVOS_VALUEBIT) {
+		// DScheevos: achievement state resets with the game
+		(*(void (**)(void))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_RESET))();
+	}
+#endif
 	sysSetCardOwner(false);	// Give Slot-1 access to arm7
 #ifndef TWLSDK
 	const u32 resetParams = ((ce9->valueBits & isSdk5) ? RESET_PARAM_SDK5 : RESET_PARAM);

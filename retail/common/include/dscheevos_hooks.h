@@ -7,6 +7,8 @@
 #ifndef DSCHEEVOS_HOOKS_H
 #define DSCHEEVOS_HOOKS_H
 
+#include <nds/ndstypes.h>
+
 #define DSCHEEVOS_LOCATION        0x02D80000  // module image (2 MB reserved)
 #define DSCHEEVOS_SIZE            0x00200000
 #define DSCHEEVOS_IMAGE_MAX       0x00040000
@@ -16,7 +18,7 @@
 #define DSCHEEVOS_CACHE_RESERVE   0x00260000  // worst-case cut to the ROM cache size
 
 #define DSCHEEVOS_MAGIC           0x56435344  // "DSCV"
-#define DSCHEEVOS_VERSION         2
+#define DSCHEEVOS_VERSION         3
 #define DSCHEEVOS_SESSION_MAGIC   0x53435344  // "DSCS"
 
 // header words
@@ -26,13 +28,44 @@
 #define DSCHEEVOS_H_INIT          0x0C
 #define DSCHEEVOS_H_VBLANK        0x10
 #define DSCHEEVOS_H_HALT          0x14
+#define DSCHEEVOS_H_STATUS        0x1C
 #define DSCHEEVOS_H_VBLANK_COUNT  0x24
+#define DSCHEEVOS_H_RESET         0x28
+#define DSCHEEVOS_H_NOTIFY        0x40  // unlock count, kept in RAM by the ARM9
 
 // session file words
 #define DSCHEEVOS_S_FILE_SIZE     0x08
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
+#define DSCHEEVOS_S_HARDCORE      0x1CD // u8
 
 // valueBits flag in both ce7 and ce9: hooks are live
 #define DSCHEEVOS_VALUEBIT        BIT(28)
+
+// The module's status (dscm_status_t in dscheevos_module.h), read by the in-game menu
+typedef struct DScheevosUnlock {
+	u32 id;
+	u32 points;
+	u32 frame;
+	char title[48];
+} DScheevosUnlock;
+
+typedef struct DScheevosStatus {
+	u32 active;
+	u32 hardcore;
+	u32 framesSnapshotted;
+	u32 framesEvaluated;
+	u32 framesDropped;
+	u32 framesMissed;
+	u32 evalLines;
+	u32 unlockCount;
+	DScheevosUnlock recent[8];
+	u32 pendingRequests;
+	u32 error;
+	char gameTitle[48];
+	u32 achievements;
+	u32 achievementsUnlocked;
+	u32 points;
+	u32 pointsUnlocked;
+} DScheevosStatus;
 
 #endif // DSCHEEVOS_HOOKS_H

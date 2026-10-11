@@ -338,6 +338,8 @@ int runNds(u32 cluster, u32 saveCluster, u32 donorTwlCluster, /* u32 gbaCluster,
 	loader->cacheBlockSize              = conf->cacheBlockSize;
 	tonccpy(loader->bannerSavPath, conf->bannerSavPath, strlen(conf->bannerSavPath));
 	tonccpy(loader->version, VER_NUMBER, sizeof(VER_NUMBER));
+	loader->dscheevosModuleCluster      = conf->dscheevosModuleCluster;
+	loader->dscheevosSessionCluster     = conf->dscheevosSessionCluster;
 
 	nocashMessage("irqDisable(IRQ_ALL);");
 	irqDisable(IRQ_ALL);

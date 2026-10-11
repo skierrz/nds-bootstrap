@@ -1,3 +1,5 @@
+> **DScheevos fork.** The `dscheevos` branch adds hook points for [DScheevos](https://github.com/skierrz/dscheevos), which brings RetroAchievements to DS games on DSi and 3DS. The hooks load the DScheevos module, give it 2 MB of the ROM cache's RAM, call it at each VBlank and in the game's idle time (`OS_Halt`). The achievement code itself lives in the DScheevos repository. Nothing changes when DScheevos isn't installed.
+
 <p align="center">
    <img src="https://github.com/DS-Homebrew/nds-bootstrap/blob/master/images/Anniversaries/10th/Logo.png"><br>
    <a href="https://gbatemp.net/threads/nds-bootstrap-loader-run-commercial-nds-backups-from-an-sd-card.454323/">

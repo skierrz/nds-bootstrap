@@ -41,6 +41,7 @@
 #include "common.h"
 #include "igm_text.h"
 #include "locations.h"
+#include "dscheevos_hooks.h"
 #include "loading.h"
 
 #define REG_MBK_CACHE_START	0x4004044
@@ -344,6 +345,12 @@ void arm9_main(void) {
 				fadeIn(BIT(1));
 				bottomScreenFadedIn = true;
 			}
+			arm9_stateFlag = ARM9_READY;
+		}
+		if (arm9_stateFlag == ARM9_DSCHEEVOS_INIT) {
+			// DScheevos: set up achievements before the game starts (module switches to its own stack)
+			int (*dscheevosInit)(const void*) = *(int (**)(const void*))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_INIT);
+			dscheevosInit((const void*)DSCHEEVOS_SESSION);
 			arm9_stateFlag = ARM9_READY;
 		}
 		if (arm9_stateFlag == ARM9_INITMBK) {

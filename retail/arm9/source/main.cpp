@@ -20,6 +20,8 @@
 #include "conf_sd.h"
 #include "version.h"
 
+extern "C" void dscheevosFindSession(configuration* conf);
+
 #define REG_SCFG_EXT7 *(u32*)0x02FFFDF0
 
 u8* lz77ImageBuffer = (u8*)0x02004000;
@@ -578,6 +580,8 @@ static int runNdsFile(configuration* conf) {
 	if (stat(sharedFontPath.c_str(), &stTwlFont) >= 0) {
 		clusterTwlFont = stTwlFont.st_ino;
 	}
+
+	dscheevosFindSession(conf);
 
 	return runNds(st.st_ino, clusterSav, clusterDonor, /* clusterGba, clusterGbaSav, */ clusterQuit, clusterWideCheat, clusterApPatch, clusterApPatchPostCardRead, clusterDSi2DSSave, clusterCheat, clusterPatchOffsetCache, clusterRamDump, clusterSrParams, clusterScreenshot, apFixOverlaysCluster, musicCluster, clusterPageFile, clusterManual, clusterTwlFont, conf);
 }

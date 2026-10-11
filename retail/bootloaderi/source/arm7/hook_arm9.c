@@ -1,3 +1,4 @@
+#include "dscheevos_hooks.h"
 #include <stdio.h>
 #include <nds/ndstypes.h>
 #include <nds/system.h>
@@ -365,6 +366,10 @@ int hookNdsRetailArm9(
 					size = (consoleModel > 0 ? dev_CACHE_ADRESS_SIZE_DSIMODE : retail_CACHE_ADRESS_SIZE_DSIMODE);
 				} else {
 					size = (consoleModel > 0 ? dev_CACHE_ADRESS_SIZE : retail_CACHE_ADRESS_SIZE);
+				}
+				extern bool dscheevosWanted(void);
+				if (dscheevosWanted() && ce9->cacheAddress + size > DSCHEEVOS_CACHE_END) {
+					size = DSCHEEVOS_CACHE_END - ce9->cacheAddress; // leave RAM for DScheevos
 				}
 			}
 			ce9->romLocation = ce9->cacheAddress;

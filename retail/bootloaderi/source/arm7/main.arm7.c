@@ -78,6 +78,7 @@
 #include "dscheevos_hooks.h"
 
 extern bool dscheevosWanted(void);
+extern bool dscheevosNetWanted(void);
 extern void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* ndsHeader);
 
 //#define memcpy __builtin_memcpy
@@ -2247,7 +2248,7 @@ int arm7_main(void) {
 		if (!twlTouch || !dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr) || (ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr) && !(*(u8*)0x02FFE1BF & BIT(0)))) {
 			NDSTouchscreenMode();
 			*(vu16*)0x4000500 = 0x807F;
-			if ((!dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr)) && !dscheevosWanted()) {
+			if ((!dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr)) && !dscheevosNetWanted()) {
 				// DScheevos keeps the Atheros (TWL) mode selected: on DWM-W024
 				// boards NTR mode disables SDIO function 1. The card engine
 				// switches to NTR mode when the game powers its DS Wi-Fi.

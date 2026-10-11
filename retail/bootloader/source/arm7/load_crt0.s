@@ -259,6 +259,11 @@ bannerSavPath:
 	.space	64
 version:
 	.space	20
+	.align	2
+dscheevosModuleCluster:
+	.word	0x00000000
+dscheevosSessionCluster:
+	.word	0x00000000
 .align 4
 
 startUp:

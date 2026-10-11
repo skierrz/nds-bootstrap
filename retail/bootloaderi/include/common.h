@@ -62,6 +62,7 @@
 #define ARM9_DISPESRB 10
 #define ARM9_WRAMONARM7 11
 #define ARM9_WRAMONARM9 12
+#define ARM9_DSCHEEVOS_INIT 13
 //};
 
 extern u32* arm9executeAddress;

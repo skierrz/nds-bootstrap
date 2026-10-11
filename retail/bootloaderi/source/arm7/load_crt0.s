@@ -72,6 +72,8 @@
 	.global musicCluster
 	.global musicsSize
 	.global pageFileCluster
+	.global dscheevosModuleCluster
+	.global dscheevosSessionCluster
 	.global manualCluster
 	.global sharedFontCluster
 	.global dldiPatchBinaryOffset
@@ -259,6 +261,11 @@ bannerSavPath:
 	.space	64
 version:
 	.space	20
+	.align	2
+dscheevosModuleCluster:
+	.word	0x00000000
+dscheevosSessionCluster:
+	.word	0x00000000
 .align 4
 
 startUp:

@@ -75,6 +75,10 @@
 #include "loading_screen.h"
 #include "unpatched_funcs.h"
 #include "nocashMessage.h"
+#include "dscheevos_hooks.h"
+
+extern bool dscheevosWanted(void);
+extern void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* ndsHeader);
 
 //#define memcpy __builtin_memcpy
 
@@ -912,6 +916,9 @@ static bool isROMLoadableInRAM(const tDSiHeader* dsiHeader, const tNDSHeader* nd
 		if (consoleModel > 0) {
 			romSizeLimit += 0x01000000;
 		}
+		if (dscheevosWanted()) {
+			romSizeLimit -= DSCHEEVOS_CACHE_RESERVE;
+		}
 		const bool nandSave = (romTid[0] == 'U');
 		if (nandSave) {
 			romSizeLimit -= retail_CACHE_ADRESS_SIZE_TWLSDK_SMALL;
@@ -1063,8 +1070,9 @@ bool dataToPreloadFound(const tNDSHeader* ndsHeader) {
 		return (dataToPreloadSize[0] > 0 && dataToPreloadFullSize() <= retail_CACHE_ADRESS_SIZE_BROWSER-0x40000);
 	}
 	const bool cheatsEnabled = (cheatSizeTotal > 4 && cheatSizeTotal <= 0x8000);
+	const u32 dscheevosReserve = dscheevosWanted() ? DSCHEEVOS_CACHE_RESERVE : 0;
 
-	return (dataToPreloadSize[0] > 0 && dataToPreloadFullSize() <= (consoleModel > 0 ? (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? dev_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : dev_CACHE_ADRESS_SIZE_TWLSDK) : dev_CACHE_ADRESS_SIZE_DSIMODE) : dev_CACHE_ADRESS_SIZE) : (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? retail_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : retail_CACHE_ADRESS_SIZE_TWLSDK) : retail_CACHE_ADRESS_SIZE_DSIMODE) : retail_CACHE_ADRESS_SIZE))-0x40000);
+	return (dataToPreloadSize[0] > 0 && dataToPreloadFullSize() + dscheevosReserve <= (consoleModel > 0 ? (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? dev_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : dev_CACHE_ADRESS_SIZE_TWLSDK) : dev_CACHE_ADRESS_SIZE_DSIMODE) : dev_CACHE_ADRESS_SIZE) : (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? retail_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : retail_CACHE_ADRESS_SIZE_TWLSDK) : retail_CACHE_ADRESS_SIZE_DSIMODE) : retail_CACHE_ADRESS_SIZE))-0x40000);
 }
 
 static void loadROMPartIntoRAM(const tNDSHeader* ndsHeader, aFile* file) {
@@ -2451,6 +2459,8 @@ int arm7_main(void) {
 			consoleModel,
 			usesCloneboot
 		);
+
+		dscheevosSetup((cardengineArm7*)ce7Location, (cardengineArm9*)ce9Location, ndsHeader);
 
 		patchOffsetCacheFileNewCrc = swiCRC16(0xFFFF, &patchOffsetCache, sizeof(patchOffsetCacheContents));
 		if (patchOffsetCacheFileNewCrc != patchOffsetCacheFilePrevCrc) {

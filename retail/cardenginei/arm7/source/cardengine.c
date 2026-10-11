@@ -43,6 +43,7 @@
 #include "fpsAdjust.h"
 #include "nds_header.h"
 #include "igm_text.h"
+#include "dscheevos_hooks.h"
 
 #ifndef TWLSDK
 // Patcher
@@ -1838,6 +1839,14 @@ void myIrqHandlerVBlank(void) {
 		volatile void (*cheatEngine)() = (volatile void*)cheatEngineAddr+4;
 		(*cheatEngine)();
 	}
+
+	#ifndef TWLSDK
+	if (valueBits & DSCHEEVOS_VALUEBIT) {
+		// DScheevos: count the VBlank, then ask the ARM9 to snapshot achievement memory
+		(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
+		IPC_SendSync(0xA);
+	}
+	#endif
 
 	if (language >= 0 && language <= 7 && languageTimer < 60*3) {
 		// Change language

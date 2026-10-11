@@ -98,6 +98,8 @@ typedef struct configuration {
 	char* manualPath;
 	bool saveRelocation;
 	u16 cacheBlockSize;
+	u32 dscheevosModuleCluster;
+	u32 dscheevosSessionCluster;
 } configuration;
 
 #endif // CONFIGURATION_H

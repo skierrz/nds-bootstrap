@@ -23,6 +23,7 @@
 extern void readFirmware(u32 address, void* destination, u32 size); // libnds/firmware.c
 extern u32 dscheevosModuleCluster;
 extern u32 dscheevosSessionCluster;
+extern u32 dscheevosPendingCluster;
 extern u32 iUncompressedSize;
 
 bool dscheevosWanted(void) {
@@ -154,10 +155,14 @@ void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* 
 	}
 
 	header[DSCHEEVOS_H_VBLANK_COUNT / 4] = 0;
+	ce7->dscheevosPendingCluster = dscheevosPendingCluster;
 	ce7->valueBits |= DSCHEEVOS_VALUEBIT;
 	ce9->valueBits |= DSCHEEVOS_VALUEBIT;
 
 	arm9_stateFlag = ARM9_DSCHEEVOS_INIT;
 	while (arm9_stateFlag != ARM9_READY);
 	dbg_printf("DScheevos: module ready\n");
+	if (!dscheevosPendingCluster) {
+		dbg_printf("DScheevos: no pending.bin, unsent unlocks won't be kept\n");
+	}
 }

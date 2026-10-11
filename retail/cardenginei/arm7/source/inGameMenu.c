@@ -39,6 +39,9 @@ extern void restorePreManual(void);
 extern void saveMainScreenSetting(void);
 extern void loadInGameMenu(void);
 extern void unloadInGameMenu(void);
+#ifndef TWLSDK
+extern void dscheevosJournalWrite(bool finishRead);
+#endif
 
 extern u16 biosRead16(u32 addr);
 
@@ -128,6 +131,9 @@ void inGameMenu(void) {
 					exitMenu = true;
 					break; */
 				case 0x54455352: // RSET
+					#ifndef TWLSDK
+					dscheevosJournalWrite(false);
+					#endif
 					exitMenu = true;
 					timeTillStatusRefresh = 7;
 					unloadInGameMenu();
@@ -137,6 +143,9 @@ void inGameMenu(void) {
 					reset(false);
 					break;
 				case 0x54495551: // QUIT
+					#ifndef TWLSDK
+					dscheevosJournalWrite(false);
+					#endif
 					unloadInGameMenu();
 					returnToLoader(false);
 					exitMenu = true;
@@ -162,6 +171,11 @@ void inGameMenu(void) {
 					sharedAddr[0] = 0xFFFFFFFF;
 					#endif
 					break;
+				#ifndef TWLSDK
+				case 0x4A435344: // DSCJ: DScheevos journal to pending.bin
+					dscheevosJournalWrite(false);
+					break;
+				#endif
 				case 0x444D4152: // RAMD
 					dumpRam();
 					exitMenu = true;

@@ -340,6 +340,7 @@ int runNds(u32 cluster, u32 saveCluster, u32 donorTwlCluster, /* u32 gbaCluster,
 	tonccpy(loader->version, VER_NUMBER, sizeof(VER_NUMBER));
 	loader->dscheevosModuleCluster      = conf->dscheevosModuleCluster;
 	loader->dscheevosSessionCluster     = conf->dscheevosSessionCluster;
+	loader->dscheevosPendingCluster     = conf->dscheevosPendingCluster;
 
 	nocashMessage("irqDisable(IRQ_ALL);");
 	irqDisable(IRQ_ALL);

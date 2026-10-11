@@ -1908,6 +1908,48 @@ static void dscheevosVBlank(void) {
 		}
 	}
 }
+
+// DScheevos: copy the module's offline journal (unlocks and leaderboard
+// entries, and whether the server has them) to pending.bin, for the launcher
+// to send next time. Only at safe points, with the game stopped: the in-game
+// menu, reset, exit, soft reset. Never while the game runs.
+// An ARM9 ROM read may still be in flight (CMD18, resumed on PING). SD
+// commands now would break it, so: finishRead (the game is ending) completes
+// it first and leaves sharedAddr[3] set, so the ARM9 keeps waiting; otherwise
+// (in-game menu) skip, and a later safe point writes the journal.
+extern u32 dscheevosPendingCluster;
+static bool dscheevosJournalPadded = false;
+
+void dscheevosJournalWrite(bool finishRead) {
+	if (!(valueBits & DSCHEEVOS_VALUEBIT) || !dscheevosPendingCluster
+	 || *(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_MAGIC) != DSCHEEVOS_MAGIC) {
+		return;
+	}
+	if (readOngoing) {
+		if (!finishRead) {
+			return;
+		}
+		while (!resume_cardRead_arm9());
+	}
+	const DScheevosJournal* journal = *(DScheevosJournal* volatile*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_JOURNAL);
+	if ((u32)journal < DSCHEEVOS_LOCATION || (u32)journal + sizeof(DScheevosJournal) > DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE
+	 || journal->magic != DSCHEEVOS_JOURNAL_MAGIC || journal->size != sizeof(DScheevosJournal)) {
+		return;
+	}
+
+	aFile file;
+	getFileFromCluster(&file, dscheevosPendingCluster, false);
+	fileWrite((const char*)journal, &file, 0, sizeof(DScheevosJournal));
+	if (!dscheevosJournalPadded) {
+		// the rest of the file is zeros (once: nothing else writes there)
+		u32 zero[16] = {0};
+		for (u32 pos = sizeof(DScheevosJournal); pos < DSCHEEVOS_JOURNAL_FILE_SIZE; pos += sizeof(zero)) {
+			const u32 len = DSCHEEVOS_JOURNAL_FILE_SIZE - pos;
+			fileWrite((const char*)zero, &file, pos, len < sizeof(zero) ? len : sizeof(zero));
+		}
+		dscheevosJournalPadded = true;
+	}
+}
 #endif
 
 void myIrqHandlerVBlank(void) {
@@ -2065,6 +2107,10 @@ void myIrqHandlerVBlank(void) {
 #ifdef TWLSDK
 			IPC_SendSync(0x5);
 #else
+			if (tryLockMutex(&saveMutex)) {
+				dscheevosJournalWrite(true); // DScheevos: back to the menu, the session ends
+				unlockMutex(&saveMutex);
+			}
 			returnToLoader(false);
 #endif
 		}
@@ -2090,6 +2136,12 @@ void myIrqHandlerVBlank(void) {
 	} */
 
 	if (sharedAddr[3] == (vu32)0x52534554) {
+		#ifndef TWLSDK
+		if (tryLockMutex(&saveMutex)) {
+			dscheevosJournalWrite(true); // DScheevos: the game is resetting, its ARM9 waits
+			unlockMutex(&saveMutex);
+		}
+		#endif
 		reset(false);
 	}
 
@@ -2099,6 +2151,9 @@ void myIrqHandlerVBlank(void) {
 				if (lockMutex(&saveMutex)) {
 					REG_MASTER_VOLUME = 0;
 					int oldIME = enterCriticalSection();
+					#ifndef TWLSDK
+					dscheevosJournalWrite(true); // DScheevos: before the soft reset
+					#endif
 					forceGameReboot();
 					leaveCriticalSection(oldIME);
 				}

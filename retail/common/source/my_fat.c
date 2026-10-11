@@ -1622,6 +1622,17 @@ u32 fileWrite (const char* buffer, aFile* file, u32 startOffset, u32 length)
 	#endif
 	curByte = startOffset % BYTES_PER_SECTOR;
 
+	// A first sector that is only partly written merges into globalBuffer,
+	// which anything may have used since the last load: force the sector
+	// read, so stale bytes are never written back. Fix from Bakkerrrs'
+	// retroachievements-ds-on-3ds (GPL-3.0), "fileWrite" in its docs.
+	if (curByte != 0 || length < BYTES_PER_SECTOR) {
+		#ifdef TWOCARD
+		prevSect[fileCard2] = -1;
+		#else
+		prevSect = -1;
+		#endif
+	}
 	loadSectorBuf(file, curSect);
 
 	// Number of bytes needed to read to align with a sector

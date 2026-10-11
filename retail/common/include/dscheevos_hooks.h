@@ -18,7 +18,7 @@
 #define DSCHEEVOS_CACHE_RESERVE   0x00260000  // worst-case cut to the ROM cache size
 
 #define DSCHEEVOS_MAGIC           0x56435344  // "DSCV"
-#define DSCHEEVOS_VERSION         5
+#define DSCHEEVOS_VERSION         6
 #define DSCHEEVOS_SESSION_MAGIC   0x53435344  // "DSCS"
 
 // header words
@@ -31,6 +31,9 @@
 #define DSCHEEVOS_H_STATUS        0x1C
 #define DSCHEEVOS_H_VBLANK_COUNT  0x24
 #define DSCHEEVOS_H_RESET         0x28
+#define DSCHEEVOS_H_LIST          0x2C  // DScheevosList*, 0 until the set is loaded; swapped whole after a rebuild
+#define DSCHEEVOS_H_NOTICES       0x30  // DScheevosNotices*
+#define DSCHEEVOS_H_JOURNAL       0x34  // DScheevosJournal*, kept current in RAM (the ARM7 reads it directly)
 #define DSCHEEVOS_H_NOTIFY        0x40  // unlock count, kept in RAM by the ARM9
 #define DSCHEEVOS_H_NETRING       0x44  // the module's frame ring for the ARM7 SDIO shim (dscm_shim.h), 0 = none
 
@@ -96,5 +99,119 @@ enum {
 	DSCHEEVOS_NET_OFFLINE,
 	DSCHEEVOS_NET_ERROR,
 };
+
+// ABI v6: the achievement list, notices and offline journal (dscm_list_t,
+// dscm_notices_t, dscm_journal_t in dscheevos_module.h)
+#define DSCHEEVOS_LIST_MAGIC      0x4C435344  // "DSCL"
+#define DSCHEEVOS_NOTICES_MAGIC   0x4E435344  // "DSCN"
+#define DSCHEEVOS_JOURNAL_MAGIC   0x4A435344  // "DSCJ"
+#define DSCHEEVOS_JOURNAL_FILE_SIZE 4096      // sd:/_nds/dscheevos/pending.bin, exactly this size
+#define DSCHEEVOS_JOURNAL_MAX     96
+#define DSCHEEVOS_NOTICE_RING     16
+#define DSCHEEVOS_INDICATOR_MAX   8
+
+// DScheevosListEntry.state
+enum {
+	DSCHEEVOS_ACH_LOCKED = 0,
+	DSCHEEVOS_ACH_UNLOCKED,
+	DSCHEEVOS_ACH_UNLOCKED_SOFTCORE, // hardcore session, unlocked earlier in softcore only
+	DSCHEEVOS_ACH_DISABLED,
+};
+// DScheevosListEntry.flags
+#define DSCHEEVOS_ACH_FLAG_MEASURED    0x01
+#define DSCHEEVOS_ACH_FLAG_CHALLENGE   0x02
+#define DSCHEEVOS_ACH_FLAG_MISSABLE    0x04
+#define DSCHEEVOS_ACH_FLAG_PROGRESSION 0x08
+#define DSCHEEVOS_ACH_FLAG_WIN         0x10
+
+typedef struct DScheevosListEntry {
+	u32 id;
+	u32 unlockTime;
+	u16 points;
+	u8 state;
+	u8 flags;
+	char title[48];
+	char description[100];
+	char measured[16];
+} DScheevosListEntry;
+
+typedef struct DScheevosList {
+	u32 magic;
+	u32 generation;
+	u32 count;
+	u32 entrySize; // sizeof(DScheevosListEntry)
+	DScheevosListEntry e[];
+} DScheevosList;
+
+// DScheevosNotice.kind
+enum {
+	DSCHEEVOS_NOTICE_NONE = 0,
+	DSCHEEVOS_NOTICE_SESSION_START,
+	DSCHEEVOS_NOTICE_UNLOCK,
+	DSCHEEVOS_NOTICE_MASTERY,
+	DSCHEEVOS_NOTICE_PROGRESS,
+	DSCHEEVOS_NOTICE_LEADERBOARD_STARTED,
+	DSCHEEVOS_NOTICE_LEADERBOARD_FAILED,
+	DSCHEEVOS_NOTICE_LEADERBOARD_SUBMITTED,
+	DSCHEEVOS_NOTICE_LEADERBOARD_RANK,
+	DSCHEEVOS_NOTICE_OFFLINE,
+	DSCHEEVOS_NOTICE_ONLINE,
+};
+
+typedef struct DScheevosNotice {
+	u32 seq;
+	u16 kind;
+	u16 reserved;
+	u32 id;
+	s32 value;
+	u32 frame;
+	char text[48];
+	char detail[48];
+} DScheevosNotice;
+
+typedef struct DScheevosIndicator {
+	u32 id; // 0 = slot free
+	char text[24]; // challenge: title; tracker: formatted value
+} DScheevosIndicator;
+
+typedef struct DScheevosNotices {
+	u32 magic;
+	u32 head;
+	DScheevosNotice ring[DSCHEEVOS_NOTICE_RING];
+	u32 indicatorsGeneration;
+	DScheevosIndicator challenges[DSCHEEVOS_INDICATOR_MAX];
+	DScheevosIndicator trackers[DSCHEEVOS_INDICATOR_MAX];
+} DScheevosNotices;
+
+typedef struct DScheevosJournalEntry {
+	u8 kind;
+	u8 hardcore;
+	u8 sent;
+	u8 reserved;
+	u32 id;
+	s32 score;
+	u32 unixTime;
+} DScheevosJournalEntry;
+
+typedef struct DScheevosJournal {
+	u32 magic;
+	u32 size; // sizeof(DScheevosJournal)
+	u32 count;
+	u32 gameId;
+	char username[32];
+	char gameHash[33];
+	u8 reserved[3];
+	DScheevosJournalEntry e[DSCHEEVOS_JOURNAL_MAX];
+} DScheevosJournal;
+
+#ifndef __cplusplus
+_Static_assert(sizeof(DScheevosListEntry) == 176, "dscm_list_entry_t");
+_Static_assert(sizeof(DScheevosList) == 16, "dscm_list_t");
+_Static_assert(sizeof(DScheevosNotice) == 116, "dscm_notice_t");
+_Static_assert(sizeof(DScheevosNotices) == 2316, "dscm_notices_t");
+_Static_assert(sizeof(DScheevosJournalEntry) == 16, "dscm_journal_entry_t");
+_Static_assert(sizeof(DScheevosJournal) == 1620, "dscm_journal_t");
+_Static_assert(sizeof(DScheevosJournal) <= DSCHEEVOS_JOURNAL_FILE_SIZE, "journal fits pending.bin");
+#endif
 
 #endif // DSCHEEVOS_HOOKS_H

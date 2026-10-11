@@ -100,6 +100,7 @@ typedef struct configuration {
 	u16 cacheBlockSize;
 	u32 dscheevosModuleCluster;
 	u32 dscheevosSessionCluster;
+	u32 dscheevosPendingCluster;
 } configuration;
 
 #endif // CONFIGURATION_H

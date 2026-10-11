@@ -264,6 +264,8 @@ dscheevosModuleCluster:
 	.word	0x00000000
 dscheevosSessionCluster:
 	.word	0x00000000
+dscheevosPendingCluster:
+	.word	0x00000000
 .align 4
 
 startUp:

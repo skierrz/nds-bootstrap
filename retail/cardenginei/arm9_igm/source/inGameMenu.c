@@ -946,6 +946,21 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 		dscheevos = (ce9i->valueBits & DSCHEEVOS_VALUEBIT) != 0;
 		dscheevosHc = dscheevos && dscheevosHardcore();
 	}
+	if(dscheevos) {
+		// DScheevos: the game is stopped, so save the offline journal to the
+		// SD card first. The ARM7 is in its menu loop once it sends keys.
+		while (sharedAddr[5] == 0x59444552 && sharedAddr[4] == 0x554E454D) { // 'REDY', MENU
+			while (REG_VCOUNT != 191) mySwiDelay(100);
+			while (REG_VCOUNT == 191) mySwiDelay(100);
+		}
+		if (sharedAddr[4] == 0x554E454D) {
+			sharedAddr[4] = 0x4A435344; // DSCJ
+			while (sharedAddr[4] == 0x4A435344) {
+				while (REG_VCOUNT != 191) mySwiDelay(100);
+				while (REG_VCOUNT == 191) mySwiDelay(100);
+			}
+		}
+	}
 	#endif
 
 	MenuItem menuItems[9];

@@ -3,6 +3,8 @@
  * the DScheevos launcher wrote for this ROM, and pass their clusters to the
  * bootloader. The session is renamed so it is used once: every play session
  * starts online through the launcher. The renamed file keeps its clusters.
+ * pending.bin (the offline journal, created by the launcher at its full
+ * size) is passed on too: the card engine writes it at safe points.
  */
 #include <nds.h>
 #include <stdio.h>
@@ -16,6 +18,7 @@
 void dscheevosFindSession(configuration* conf) {
 	conf->dscheevosModuleCluster = 0;
 	conf->dscheevosSessionCluster = 0;
+	conf->dscheevosPendingCluster = 0;
 	if (conf->b4dsMode || conf->bootstrapOnFlashcard || conf->gameOnFlashcard || conf->isDSiWare) {
 		return;
 	}
@@ -48,6 +51,10 @@ void dscheevosFindSession(configuration* conf) {
 	}
 	conf->dscheevosModuleCluster = stModule.st_ino;
 	conf->dscheevosSessionCluster = stSession.st_ino;
+	struct stat stPending;
+	if (stat(DSCHEEVOS_DIR "pending.bin", &stPending) == 0 && stPending.st_size == DSCHEEVOS_JOURNAL_FILE_SIZE) {
+		conf->dscheevosPendingCluster = stPending.st_ino;
+	}
 	if (((const u8*)head)[DSCHEEVOS_S_HARDCORE]) {
 		conf->cheatSize = 0; // hardcore: no cheats (AP-fix patches still apply)
 	}

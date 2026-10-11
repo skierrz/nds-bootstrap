@@ -46,6 +46,7 @@
 .global romPartFrame
 .global romMapLines
 .global romMap
+.global dscheevosPendingCluster
 
 #define ICACHE_SIZE	0x2000
 #define DCACHE_SIZE	0x1000
@@ -171,6 +172,8 @@ romMap:
 
 	.word	0x00000000
 	.word	0x00000000
+	.word	0x00000000
+dscheevosPendingCluster:
 	.word	0x00000000
 .align	4
 

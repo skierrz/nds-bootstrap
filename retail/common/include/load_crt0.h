@@ -79,6 +79,7 @@ typedef struct loadCrt0 {
 	unsigned char version[20];
 	u32 dscheevosModuleCluster;
 	u32 dscheevosSessionCluster;
+	u32 dscheevosPendingCluster;
 } loadCrt0;
 
 #endif // LOAD_CRT0_H

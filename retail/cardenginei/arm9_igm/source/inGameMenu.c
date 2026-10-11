@@ -961,7 +961,7 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 	if(igmText.manualMaxLine > 0 && !exception)
 		menuItems[menuItemCount++] = MENU_MANUAL;
 	#ifndef B4DS
-	if(!dscheevosHc) // DScheevos hardcore: no memory tools
+	if(!dscheevos) // DScheevos: no memory tools in hardcore, and a dump to SD would carry the RA login token and the Wi-Fi key
 	#endif
 		menuItems[menuItemCount++] = MENU_RAM_DUMP;
 	if(!exception)

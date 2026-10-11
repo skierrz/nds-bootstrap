@@ -122,6 +122,10 @@ void dscheevosMenu(void) {
 			print(1, 19, (const unsigned char*)"Frames skipped", FONT_RED, false);
 			printNum(16, 19, s->framesDropped, FONT_RED);
 		}
+		if (s->netRejoins) {
+			print(1, 20, (const unsigned char*)"Wi-Fi rejoins", FONT_DARKER_GRAY, false);
+			printNum(16, 20, s->netRejoins, FONT_DARKER_GRAY);
+		}
 	}
 	print(1, 22, (const unsigned char*)"B: Back", FONT_LIGHT_GRAY, false);
 

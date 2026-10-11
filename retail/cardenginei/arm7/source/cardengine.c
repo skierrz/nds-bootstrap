@@ -44,6 +44,9 @@
 #include "nds_header.h"
 #include "igm_text.h"
 #include "dscheevos_hooks.h"
+#ifndef TWLSDK
+#include "shim.h"
+#endif
 
 #ifndef TWLSDK
 // Patcher
@@ -1828,9 +1831,56 @@ static u32 dscheevosNotifySeen = 0;
 static int dscheevosBlink = 0;
 static u8 dscheevosLed = 0;
 
+// DScheevos network: move HTC frames between the Atheros mailbox and
+// the module's rings (shim_shared_t, pointer in the module header). The chip
+// was left associated by the launcher. While the game is using its NTR (DS)
+// Wi-Fi, leave the chip alone and select NTR mode in GPIO_WIFI.
+static u8 dscheevosNetAttached = 0;
+
+static void dscheevosNetPoll(void) {
+	shim_shared_t* ring = *(shim_shared_t* volatile*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NETRING);
+	if (!ring || ring->magic != SHIM_MAGIC) {
+		return;
+	}
+	// The game is using its local (DS-mode) wireless when the NTR Wi-Fi is
+	// powered (POWCNT2 bit 1; many games set it at boot without using it)
+	// and its RF/baseband clock is on (W_POWER_US bit 0 = 0).
+	const u16 powcnt2 = REG_POWERCNT;
+	const u16 powerUs = (powcnt2 & BIT(1)) ? *(vu16*)0x04808036 : 1;
+	ring->stats.ntr_powcnt2 = powcnt2;
+	ring->stats.ntr_power_us = powerUs;
+	if ((powcnt2 & BIT(1)) && !(powerUs & BIT(0))) {
+		// DS-mode Wi-Fi owns the radio: select NTR mode, leave the chip alone.
+		*(vu16*)0x04004C04 |= BIT(8);
+		ring->stats.paused_ntr_wifi++;
+		return;
+	}
+	if (*(vu16*)0x04004C04 & BIT(8)) {
+		*(vu16*)0x04004C04 &= ~BIT(8);	// back to Atheros (TWL) mode
+	}
+	if (!dscheevosNetAttached) {
+		shim_attach(ring);
+		dscheevosNetAttached = 1;
+	}
+	const u16 v0 = REG_VCOUNT;
+	const u32 did = shim_poll();
+	const u16 v1 = REG_VCOUNT;
+	const u32 lines = (v1 >= v0) ? (v1 - v0) : (v1 + 263 - v0);
+	if (!ring->run) {
+		return;
+	}
+	if (!did) {
+		if (lines > ring->stats.lines_idle_max) ring->stats.lines_idle_max = lines;
+	} else {
+		ring->stats.lines_busy_sum += lines;
+		if (lines > ring->stats.lines_busy_max) ring->stats.lines_busy_max = lines;
+	}
+}
+
 static void dscheevosVBlank(void) {
 	(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
 	IPC_SendSync(0xA);
+	dscheevosNetPoll();
 
 	if ((valueBits & i2cBricked) || consoleModel >= 2) {
 		return;

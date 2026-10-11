@@ -38,6 +38,7 @@
 #define DSCHEEVOS_S_FILE_SIZE     0x08
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
 #define DSCHEEVOS_S_HARDCORE      0x1CD // u8
+#define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
 
 // valueBits flag in both ce7 and ce9: hooks are live
 #define DSCHEEVOS_VALUEBIT        BIT(28)

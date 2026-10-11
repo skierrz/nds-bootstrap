@@ -1836,27 +1836,35 @@ static u8 dscheevosLed = 0;
 // was left associated by the launcher. While the game is using its NTR (DS)
 // Wi-Fi, leave the chip alone and select NTR mode in GPIO_WIFI.
 static u8 dscheevosNetAttached = 0;
+static u8 dscheevosNtrSelected = 0;
 
 static void dscheevosNetPoll(void) {
 	shim_shared_t* ring = *(shim_shared_t* volatile*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NETRING);
 	if (!ring || ring->magic != SHIM_MAGIC) {
 		return;
 	}
-	// The game is using its local (DS-mode) wireless when the NTR Wi-Fi is
+	// The game is using its own (DS-mode) wireless once the DS Wi-Fi is
 	// powered (POWCNT2 bit 1; many games set it at boot without using it)
-	// and its RF/baseband clock is on (W_POWER_US bit 0 = 0).
+	// and its RF clock is on (W_POWER_US bit 0 = 0). Then select DS-mode
+	// Wi-Fi (GPIO_WIFI bit 8) and leave the DSi chip alone until it's off.
+	// On DWM-W024 boards the DS Wi-Fi only works with DS mode selected, so a
+	// game's local wireless there may need "Send unlocks during play" off in
+	// the launcher (real hardware still to be tested).
 	const u16 powcnt2 = REG_POWERCNT;
 	const u16 powerUs = (powcnt2 & BIT(1)) ? *(vu16*)0x04808036 : 1;
 	ring->stats.ntr_powcnt2 = powcnt2;
 	ring->stats.ntr_power_us = powerUs;
 	if ((powcnt2 & BIT(1)) && !(powerUs & BIT(0))) {
-		// DS-mode Wi-Fi owns the radio: select NTR mode, leave the chip alone.
-		*(vu16*)0x04004C04 |= BIT(8);
+		if (!(*(vu16*)0x04004C04 & BIT(8))) {
+			*(vu16*)0x04004C04 |= BIT(8);
+			dscheevosNtrSelected = 1;
+		}
 		ring->stats.paused_ntr_wifi++;
 		return;
 	}
-	if (*(vu16*)0x04004C04 & BIT(8)) {
-		*(vu16*)0x04004C04 &= ~BIT(8);	// back to Atheros (TWL) mode
+	if (dscheevosNtrSelected) {
+		*(vu16*)0x04004C04 &= ~BIT(8);	// back to the DSi chip
+		dscheevosNtrSelected = 0;
 	}
 	if (!dscheevosNetAttached) {
 		shim_attach(ring);
@@ -2159,7 +2167,8 @@ void myIrqHandlerVBlank(void) {
 		REG_IE &= ~IRQ_NETWORK; // DSi RTC fix
 	}
 
-	bool wifiIrqCheck = (REG_WIFIIRQ != 0);
+	// DS-mode Wi-Fi registers only while DS-mode Wi-Fi is selected (DScheevos keeps the DSi chip selected otherwise)
+	bool wifiIrqCheck = (*(vu16*)0x04004C04 & BIT(8)) ? (REG_WIFIIRQ != 0) : false;
 	if (wifiIrq != wifiIrqCheck) {
 		// Turn off card read DMA if WiFi is used, and back on when not in use
 		if (wifiIrq) {

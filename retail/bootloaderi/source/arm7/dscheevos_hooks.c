@@ -26,6 +26,22 @@ bool dscheevosWanted(void) {
 	return dscheevosModuleCluster && dscheevosSessionCluster && !dsiModeConfirmed && !isDSiWare;
 }
 
+// The session keeps the launcher's Wi-Fi connection during play: the DSi
+// Wi-Fi chip must stay selected (no DS-mode Wi-Fi at boot).
+bool dscheevosNetWanted(void) {
+	static int cached = -1;
+	if (cached < 0) {
+		u8 valid = 0;
+		if (dscheevosWanted()) {
+			aFile file;
+			getFileFromCluster(&file, dscheevosSessionCluster, false);
+			fileRead((char*)&valid, &file, DSCHEEVOS_S_NET_VALID, 1);
+		}
+		cached = valid ? 1 : 0;
+	}
+	return cached;
+}
+
 // NitroSDK OS_Halt: mov r0, #0; mcr p15, 0, r0, c7, c0, 4; bx lr
 static int patchOsHalt(const tNDSHeader* ndsHeader, u32 haltEntry) {
 	u32* p = (u32*)ndsHeader->arm9destination;

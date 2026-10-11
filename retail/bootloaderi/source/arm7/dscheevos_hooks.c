@@ -7,8 +7,10 @@
  *
  * Only DS (NTR-mode) games booted from SD use this.
  */
+#include <string.h>
 #include <nds/ndstypes.h>
 #include <nds/memory.h>
+#include "tonccpy.h"
 #include "my_fat.h"
 #include "debug_file.h"
 #include "nds_header.h"
@@ -18,6 +20,7 @@
 #include "value_bits.h"
 #include "dscheevos_hooks.h"
 
+extern void readFirmware(u32 address, void* destination, u32 size); // libnds/firmware.c
 extern u32 dscheevosModuleCluster;
 extern u32 dscheevosSessionCluster;
 extern u32 iUncompressedSize;
@@ -60,6 +63,52 @@ static int patchOsHalt(const tNDSHeader* ndsHeader, u32 haltEntry) {
 	return count;
 }
 
+static u16 crc16(const u8* data, int length) {
+	u32 crc = 0;
+	for (int i = 0; i < length; i++) {
+		crc ^= data[i];
+		for (int j = 0; j < 8; j++) {
+			crc = (crc & 1) ? (crc >> 1) ^ 0xA001 : crc >> 1;
+		}
+	}
+	return crc;
+}
+
+// WPA2 rekeys during play need the access point's PMK. The console keeps it
+// with its own saved Wi-Fi settings (DSi slots 4-6 in the firmware flash):
+// read it, read-only, into the session in RAM. It never goes to the SD card.
+static void fillPmk(u8* session) {
+	session[DSCHEEVOS_S_PMK_VALID] = 0;
+	toncset(session + DSCHEEVOS_S_PMK, 0, 32);
+	const u32 ssidLen = session[DSCHEEVOS_S_AP_SSID_LEN];
+	if (!session[DSCHEEVOS_S_NET_VALID] || session[DSCHEEVOS_S_AP_SECURITY] != DSCHEEVOS_AP_WPA2
+	 || ssidLen == 0 || ssidLen > 32) {
+		return;
+	}
+
+	u16 settingsOffset = 0;
+	readFirmware(0x20, &settingsOffset, sizeof(settingsOffset));
+	const u32 base = settingsOffset * 8 - 0xA00;
+	u8* slot = (u8*)(DSCHEEVOS_SESSION + DSCHEEVOS_SESSION_MAX); // module heap, not in use yet
+	for (int i = 0; i < 3; i++) {
+		readFirmware(base + i * 0x200, slot, 0x200);
+		if (crc16(slot, 0x100) != 0 || crc16(slot + 0x100, 0x100) != 0
+		 || slot[0xEF] == 0       // slot unused
+		 || slot[0xE7] == 0       // not WPA
+		 || memcmp(slot + 0x40, session + DSCHEEVOS_S_AP_SSID, ssidLen) != 0
+		 || (ssidLen < 32 && slot[0x40 + ssidLen] != 0)) {
+			continue;
+		}
+		tonccpy(session + DSCHEEVOS_S_PMK, slot + 0x100, 32);
+		session[DSCHEEVOS_S_PMK_VALID] = 1;
+		dbg_printf("DScheevos: PMK from Wi-Fi slot ");
+		dbg_hexa(4 + i);
+		dbg_printf("\n");
+		break;
+	}
+	toncset(slot, 0, 0x200);
+}
+
 static void disable(const char* why) {
 	*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_MAGIC) = 0;
 	dbg_printf("DScheevos off: ");
@@ -93,6 +142,11 @@ void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* 
 		return;
 	}
 	fileRead((char*)session, &file, 0, sessionSize);
+	if (session[DSCHEEVOS_S_SIZE / 4] != DSCHEEVOS_S_BOOT_SIZE || sessionSize < DSCHEEVOS_S_BOOT_SIZE) {
+		disable("old session");
+		return;
+	}
+	fillPmk((u8*)session);
 
 	if (patchOsHalt(ndsHeader, header[DSCHEEVOS_H_HALT / 4]) == 0) {
 		disable("no OS_Halt");

@@ -18,7 +18,7 @@
 #define DSCHEEVOS_CACHE_RESERVE   0x00260000  // worst-case cut to the ROM cache size
 
 #define DSCHEEVOS_MAGIC           0x56435344  // "DSCV"
-#define DSCHEEVOS_VERSION         4
+#define DSCHEEVOS_VERSION         5
 #define DSCHEEVOS_SESSION_MAGIC   0x53435344  // "DSCS"
 
 // header words
@@ -35,10 +35,18 @@
 #define DSCHEEVOS_H_NETRING       0x44  // the module's frame ring for the ARM7 SDIO shim (dscm_shim.h), 0 = none
 
 // session file words
+#define DSCHEEVOS_S_SIZE          0x04  // sizeof(dscm_boot_t)
 #define DSCHEEVOS_S_FILE_SIZE     0x08
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
 #define DSCHEEVOS_S_HARDCORE      0x1CD // u8
 #define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
+#define DSCHEEVOS_S_AP_SSID       0x210 // char[32]: the access point the launcher joined
+#define DSCHEEVOS_S_AP_SSID_LEN   0x230 // u8
+#define DSCHEEVOS_S_AP_SECURITY   0x238 // u8: 3 = WPA2
+#define DSCHEEVOS_S_PMK_VALID     0x23B // u8, set here in RAM only
+#define DSCHEEVOS_S_PMK           0x23C // u8[32], filled here in RAM only
+#define DSCHEEVOS_S_BOOT_SIZE     0x25C
+#define DSCHEEVOS_AP_WPA2         3
 
 // valueBits flag in both ce7 and ce9: hooks are live
 #define DSCHEEVOS_VALUEBIT        BIT(28)
@@ -71,6 +79,8 @@ typedef struct DScheevosStatus {
 	u32 netState; // DSCHEEVOS_NET_*
 	u32 netDetail;
 	u32 unlocksSent;
+	u32 tlsHandshakeMs;
+	u32 netRejoins; // times the module reassociated (AP drop, group rekey)
 } DScheevosStatus;
 
 enum {

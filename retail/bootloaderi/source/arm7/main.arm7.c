@@ -2247,7 +2247,10 @@ int arm7_main(void) {
 		if (!twlTouch || !dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr) || (ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr) && !(*(u8*)0x02FFE1BF & BIT(0)))) {
 			NDSTouchscreenMode();
 			*(vu16*)0x4000500 = 0x807F;
-			if (!dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr)) {
+			if ((!dsiModeConfirmed || !ROMsupportsDsiMode(&dsiHeaderTemp.ndshdr)) && !dscheevosWanted()) {
+				// DScheevos keeps the Atheros (TWL) mode selected: on DWM-W024
+				// boards NTR mode disables SDIO function 1. The card engine
+				// switches to NTR mode when the game powers its DS Wi-Fi.
 				REG_GPIO_WIFI |= BIT(8);	// Old NDS-Wifi mode
 			}
 		}

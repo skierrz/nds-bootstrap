@@ -96,12 +96,25 @@ void dscheevosMenu(void) {
 		}
 
 		if (s->error) {
-			print(1, 16, (const unsigned char*)"Achievements stopped (error)", FONT_RED, false);
-		} else if (s->pendingRequests) {
-			print(1, 16, (const unsigned char*)"Waiting to send:", FONT_LIGHT_GRAY, false);
-			printNum(18, 16, s->pendingRequests, FONT_WHITE);
+			print(1, 15, (const unsigned char*)"Achievements stopped (error)", FONT_RED, false);
 		} else {
-			print(1, 16, (const unsigned char*)"Everything sent", FONT_LIGHT_GRAY, false);
+			const char* net = "No network in this session";
+			FontPalette pal = FONT_LIGHT_GRAY;
+			switch (s->netState) {
+				case DSCHEEVOS_NET_CONNECTING: net = "Connecting..."; break;
+				case DSCHEEVOS_NET_ONLINE: net = "Online"; pal = FONT_LIME; break;
+				case DSCHEEVOS_NET_SENDING: net = "Online, sending..."; pal = FONT_LIME; break;
+				case DSCHEEVOS_NET_PAUSED: net = "Paused: game uses wireless"; break;
+				case DSCHEEVOS_NET_OFFLINE: net = "Wi-Fi lost"; pal = FONT_RED; break;
+				case DSCHEEVOS_NET_ERROR: net = "Can't reach the server"; pal = FONT_RED; break;
+			}
+			print(1, 15, (const unsigned char*)net, pal, false);
+			print(1, 16, (const unsigned char*)"Sent", FONT_LIGHT_GRAY, false);
+			int x = printNum(6, 16, s->unlocksSent, FONT_WHITE);
+			if (s->pendingRequests) {
+				print(x + 2, 16, (const unsigned char*)"waiting", FONT_LIGHT_GRAY, false);
+				printNum(x + 10, 16, s->pendingRequests, FONT_WHITE);
+			}
 		}
 		print(1, 18, (const unsigned char*)"Frames checked", FONT_DARKER_GRAY, false);
 		printNum(16, 18, s->framesEvaluated, FONT_DARKER_GRAY);

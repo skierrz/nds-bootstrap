@@ -73,6 +73,12 @@ void dscheevosMenu(void) {
 
 		int x;
 		print(1, 3, (const unsigned char*)(s->hardcore ? "HARDCORE" : "Softcore"), s->hardcore ? FONT_RED : FONT_LIGHT_BLUE, false);
+		if (s->hardcore) {
+			// hardcore rules always apply; whether RetroAchievements counts the
+			// unlocks as hardcore depends on it recognising this client
+			print(1, 4, (const unsigned char*)(s->hardcore == DSCHEEVOS_HARDCORE_REFUSED ?
+				"Rules on, RA counts as softcore" : "Not yet confirmed by RA"), FONT_LIGHT_GRAY, false);
+		}
 		x = printNum(11, 3, s->achievementsUnlocked, FONT_WHITE);
 		printChar(x, 3, '/', FONT_WHITE, false);
 		printNum(x + 1, 3, s->achievements, FONT_WHITE);

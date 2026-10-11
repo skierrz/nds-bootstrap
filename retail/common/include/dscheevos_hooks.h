@@ -51,6 +51,10 @@
 // valueBits flag in both ce7 and ce9: hooks are live
 #define DSCHEEVOS_VALUEBIT        BIT(28)
 
+// DScheevosStatus.hardcore: hardcore rules on, but the server sent its
+// "unsupported emulator" warning, so it files unlocks as softcore
+#define DSCHEEVOS_HARDCORE_REFUSED 2
+
 // The module's status (dscm_status_t in dscheevos_module.h), read by the in-game menu
 typedef struct DScheevosUnlock {
 	u32 id;

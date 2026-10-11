@@ -1821,6 +1821,37 @@ void myIrqHandlerFIFO(void) {
 }
 
 
+#ifndef TWLSDK
+// DScheevos: count the VBlank, then ask the ARM9 to snapshot achievement
+// memory. On a new unlock, blink the DSi's Wi-Fi LED three times.
+static u32 dscheevosNotifySeen = 0;
+static int dscheevosBlink = 0;
+static u8 dscheevosLed = 0;
+
+static void dscheevosVBlank(void) {
+	(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
+	IPC_SendSync(0xA);
+
+	if ((valueBits & i2cBricked) || consoleModel >= 2) {
+		return;
+	}
+	const u32 notify = *(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_NOTIFY);
+	if (notify != dscheevosNotifySeen) {
+		dscheevosNotifySeen = notify;
+		if (dscheevosBlink == 0) {
+			dscheevosLed = i2cReadRegister(0x4A, 0x30);
+		}
+		dscheevosBlink = 6*6;
+	}
+	if (dscheevosBlink > 0) {
+		dscheevosBlink--;
+		if (dscheevosBlink % 6 == 0) {
+			i2cWriteRegister(0x4A, 0x30, (dscheevosBlink == 0) ? dscheevosLed : (((dscheevosBlink / 6) & 1) ? 0x13 : 0x12));
+		}
+	}
+}
+#endif
+
 void myIrqHandlerVBlank(void) {
   while (1) {
 	#ifdef DEBUG		
@@ -1842,9 +1873,7 @@ void myIrqHandlerVBlank(void) {
 
 	#ifndef TWLSDK
 	if (valueBits & DSCHEEVOS_VALUEBIT) {
-		// DScheevos: count the VBlank, then ask the ARM9 to snapshot achievement memory
-		(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
-		IPC_SendSync(0xA);
+		dscheevosVBlank();
 	}
 	#endif
 

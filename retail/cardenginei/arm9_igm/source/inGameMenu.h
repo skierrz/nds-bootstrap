@@ -11,7 +11,8 @@ typedef enum {
 	MENU_RAM_DUMP = 4,
 	MENU_OPTIONS = 5,
 	MENU_RAM_VIEWER = 6,
-	MENU_QUIT = 7
+	MENU_QUIT = 7,
+	MENU_ACHIEVEMENTS = 8 // DScheevos
 } MenuItem;
 
 typedef enum {

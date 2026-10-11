@@ -1,5 +1,8 @@
 #include "inGameMenu.h"
 
+#include <stddef.h>
+#include "dscheevos_hooks.h"
+
 #include <nds/bios.h>
 #include <nds/ndstypes.h>
 #include <nds/input.h>
@@ -465,11 +468,28 @@ static void drawCursor(u8 line) {
 	BG_MAP_RAM_SUB(15)[line * 0x20 + pos] = igmText.rtl ? '<' : '>';
 }
 
+#ifndef B4DS
+extern bool dscheevosHardcore(void);
+extern void dscheevosMenu(void);
+static bool dscheevos = false;
+static bool dscheevosHc = false;
+#endif
+
 static void drawMainMenu(MenuItem *menuItems, int menuItemCount) {
 	clearScreen(false);
 
 	// Print labels
 	for(int i = 0; i < menuItemCount; i++) {
+		#ifndef B4DS
+		if(menuItems[i] == MENU_ACHIEVEMENTS) {
+			const unsigned char *label = (const unsigned char *)"Achievements...";
+			if(igmText.rtl)
+				printRight(0x1D, i, label, FONT_WHITE, false);
+			else
+				print(2, i, label, FONT_WHITE, false);
+			continue;
+		}
+		#endif
 		if(igmText.rtl)
 			printRight(0x1D, i, igmText.menu[menuItems[i]], FONT_WHITE, false);
 		else
@@ -497,7 +517,8 @@ static void optionsMenu(s32 *mainScreen, u32 consoleModel) {
 		optionsItems[optionsItemCount++] = OPTIONS_BRIGHTNESS;
 	#ifndef B4DS
 	optionsItems[optionsItemCount++] = OPTIONS_VOLUME;
-	optionsItems[optionsItemCount++] = OPTIONS_REFRESH_RATE;
+	if(!dscheevosHc) // DScheevos hardcore: no slow motion
+		optionsItems[optionsItemCount++] = OPTIONS_REFRESH_RATE;
 	optionsItems[optionsItemCount++] = OPTIONS_CLOCK_SPEED;
 	optionsItems[optionsItemCount++] = OPTIONS_VRAM_MODE;
 	#endif
@@ -918,18 +939,37 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 	// Let ARM7 know the menu loaded
 	sharedAddr[5] = 0x59444552; // 'REDY'
 
-	MenuItem menuItems[8];
+	#ifndef B4DS
+	{
+		// DScheevos: the card engine's flags sit next to mainScreen
+		const cardengineArm9* ce9i = (const cardengineArm9*)((u8*)mainScreen - offsetof(cardengineArm9, mainScreen));
+		dscheevos = (ce9i->valueBits & DSCHEEVOS_VALUEBIT) != 0;
+		dscheevosHc = dscheevos && dscheevosHardcore();
+	}
+	#endif
+
+	MenuItem menuItems[9];
 	int menuItemCount = 0;
 	if(!exception)
 		menuItems[menuItemCount++] = MENU_EXIT;
+	#ifndef B4DS
+	if(dscheevos && !exception)
+		menuItems[menuItemCount++] = MENU_ACHIEVEMENTS;
+	#endif
 	menuItems[menuItemCount++] = MENU_RESET;
 	menuItems[menuItemCount++] = MENU_SCREENSHOT;
 	if(igmText.manualMaxLine > 0 && !exception)
 		menuItems[menuItemCount++] = MENU_MANUAL;
-	menuItems[menuItemCount++] = MENU_RAM_DUMP;
+	#ifndef B4DS
+	if(!dscheevosHc) // DScheevos hardcore: no memory tools
+	#endif
+		menuItems[menuItemCount++] = MENU_RAM_DUMP;
 	if(!exception)
 		menuItems[menuItemCount++] = MENU_OPTIONS;
-	menuItems[menuItemCount++] = MENU_RAM_VIEWER;
+	#ifndef B4DS
+	if(!dscheevosHc)
+	#endif
+		menuItems[menuItemCount++] = MENU_RAM_VIEWER;
 	menuItems[menuItemCount++] = MENU_QUIT;
 
 	if(exception) {
@@ -1019,6 +1059,11 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 				case MENU_RAM_VIEWER:
 					ramViewer();
 					break;
+				#ifndef B4DS
+				case MENU_ACHIEVEMENTS:
+					dscheevosMenu();
+					break;
+				#endif
 				case MENU_QUIT:
 					if (boolQuestion(igmText.quitGameMessage)) {
 						res = 0x54495845; // EXIT

@@ -62,6 +62,7 @@ void inGameMenu(void) {
 	sharedAddr[4] = 0x554E454D; // 'MENU'
 	const u32 errorBak = sharedAddr[0];
 	IPC_SendSync(0x9);
+	const u8 masterVolume = REG_MASTER_VOLUME; // SOUNDCNT reads back: give the game its own volume back
 	REG_MASTER_VOLUME = 0;
 	int oldIME = enterCriticalSection();
 
@@ -253,5 +254,5 @@ void inGameMenu(void) {
 	unloadInGameMenu();
 
 	leaveCriticalSection(oldIME);
-	REG_MASTER_VOLUME = 127;
+	REG_MASTER_VOLUME = masterVolume;
 }

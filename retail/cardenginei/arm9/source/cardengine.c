@@ -1542,17 +1542,25 @@ void initMBKARM9_dsiMode(void) {
 
 extern void reset(u32 param, u32 tid2);
 
-void inGameMenu(s32* exRegisters) {
-	int oldIME = enterCriticalSection();
-
-	while (sharedAddr[5] != 0x4C4D4749) { // 'IGML'
-		while (REG_VCOUNT != 191) swiDelay(100);
-		while (REG_VCOUNT == 191) swiDelay(100);
+// The ARM7 pages the menu in or out: it raises 'IGML' and clears it when done, or,
+// with the menu kept in place (DScheevos sessions), sets 'IGMD' at once
+static void waitForIgmPaging(void) {
+	while (sharedAddr[5] != 0x4C4D4749 && sharedAddr[5] != 0x444D4749) { // 'IGML', 'IGMD'
+		swiDelay(100); // not once a frame: IGMD comes within microseconds, or at the start of VBlank
 	}
 	while (sharedAddr[5] == 0x4C4D4749) { // 'IGML'
 		while (REG_VCOUNT != 191) swiDelay(100);
 		while (REG_VCOUNT == 191) swiDelay(100);
 	}
+	if (sharedAddr[5] == 0x444D4749) { // 'IGMD'
+		sharedAddr[5] = 0;
+	}
+}
+
+void inGameMenu(s32* exRegisters) {
+	int oldIME = enterCriticalSection();
+
+	waitForIgmPaging();
 
 	#ifndef TWLSDK
 	if (ce9->valueBits & useSharedWram) {
@@ -1564,14 +1572,7 @@ void inGameMenu(s32* exRegisters) {
 	volatile u32 (*inGameMenu)(s32*, u32, s32*) = (volatile void*)INGAME_MENU_LOCATION + IGM_ENTRY;
 	const u32 res = (*inGameMenu)(&ce9->mainScreen, ce9->consoleModel, exRegisters);
 
-	while (sharedAddr[5] != 0x4C4D4749) { // 'IGML'
-		while (REG_VCOUNT != 191) swiDelay(100);
-		while (REG_VCOUNT == 191) swiDelay(100);
-	}
-	while (sharedAddr[5] == 0x4C4D4749) { // 'IGML'
-		while (REG_VCOUNT != 191) swiDelay(100);
-		while (REG_VCOUNT == 191) swiDelay(100);
-	}
+	waitForIgmPaging();
 
 	#ifdef TWLSDK
 	if (res == 0x54495845) {

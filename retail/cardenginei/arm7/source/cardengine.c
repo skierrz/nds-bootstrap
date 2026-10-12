@@ -1108,8 +1108,80 @@ void saveMainScreenSettingIgm(void) {
 	fileWrite((char*)sharedAddr, &patchOffsetCacheFile, 0x1FC, sizeof(u32));
 }
 
+#ifndef TWLSDK
+// DScheevos sessions: the menu's window (INGAME_MENU_LOCATION, 40 KB in the DSi's
+// extra RAM, above the module) isn't game RAM, and nothing else uses it in DS mode
+// once the ROM cache ends below the module. Then the menu stays in its window
+// between opens instead of being swapped with the window through the page file
+// (80 KB of SD traffic each way). Checked against the card engine's actual ROM and
+// cache layout, so any layout that reaches the window keeps the swap.
+#define IGM_WINDOW_START 0x00F88000 // INGAME_MENU_LOCATION, as an offset into main RAM
+#define IGM_WINDOW_END   (IGM_WINDOW_START + 0xA000)
+#define ce9ROMinRAM BIT(1)
+#define ce9eSdk2    BIT(2)
+#define ce9isSdk5   BIT(5)
+
+static bool overlapsIgmWindow(u32 start, u32 end) {
+	// both main RAM aliases: 0x02000000 and 0x0C000000 (16 MB; 0x0D000000+ is a dev console's second half)
+	if (start >= 0x0C000000 && start < 0x0D000000) {
+		start -= 0x0C000000;
+		end -= 0x0C000000;
+	} else if (start >= 0x02000000 && start < 0x03000000) {
+		start -= 0x02000000;
+		end -= 0x02000000;
+	} else {
+		return false;
+	}
+	return start < IGM_WINDOW_END && end > IGM_WINDOW_START;
+}
+
+static bool igmWindowFree(void) {
+	static int windowFree = -1;
+	if (windowFree >= 0) return windowFree;
+	windowFree = 0;
+	if (!(valueBits & DSCHEEVOS_VALUEBIT) || (valueBits & gameOnFlashcard)) return false;
+	const cardengineArm9* ce9 = (const cardengineArm9*)CARDENGINEI_ARM9_LOCATION;
+	if (ce9->ce9 != CARDENGINEI_ARM9_LOCATION || ce9->romMapLines > 8) return false; // not the card engine layout this knows
+	for (u32 i = 0; i < ce9->romMapLines; i++) { // the ROM, or its preloaded parts, in RAM
+		if (overlapsIgmWindow(ce9->romMap[i][1], ce9->romMap[i][2])) return false;
+	}
+	if (!(ce9->valueBits & ce9ROMinRAM)) { // every ROM cache slot
+		const u32* table = (const u32*)((!(ce9->valueBits & ce9isSdk5) && (ce9->valueBits & ce9eSdk2)) ? CACHE_ADDRESS_TABLE_LOCATION2 : CACHE_ADDRESS_TABLE_LOCATION);
+		for (u32 i = 0; i < ce9->cacheSlots; i++) {
+			if (overlapsIgmWindow(table[i], table[i] + ce9->cacheBlockSize)) return false;
+		}
+	}
+	windowFree = 1;
+	return true;
+}
+
+static bool igmResident = false;
+static u32 igmFontSum = 0; // the menu's font: still intact means still in place
+
+static u32 igmFontChecksum(void) {
+	const u32* p = (const u32*)((struct IgmText *)INGAME_MENU_LOCATION)->font;
+	u32 sum = 0;
+	for (u32 i = 0; i < sizeof(igmText->font) / 4; i++) sum = (sum << 1 | sum >> 31) + p[i];
+	return sum;
+}
+#endif
+
+// While it pages the menu in or out the ARM7 holds 'IGML' in sharedAddr[5] and then
+// clears it; with the menu kept in place it sets 'IGMD' instead (CE9 inGameMenu waits for either).
 void loadInGameMenu(void) {
 	const u32 igmLocation = INGAME_MENU_LOCATION;
+
+	#ifndef TWLSDK
+	if (igmWindowFree()) {
+		if (!igmResident || igmFontChecksum() != igmFontSum) {
+			fileRead((char*)igmLocation, &pageFile, 0, 0xA000);	// Read in-game menu; the window holds nothing to back up
+			igmFontSum = igmFontChecksum();
+			igmResident = true;
+		}
+		sharedAddr[5] = 0x444D4749; // 'IGMD'
+		return;
+	}
+	#endif
 
 	sharedAddr[5] = 0x4C4D4749; // 'IGML'
 	fileWrite((char*)igmLocation, &pageFile, 0xA000, 0xA000);	// Backup part of game RAM to page file
@@ -1120,6 +1192,15 @@ void loadInGameMenu(void) {
 void unloadInGameMenu(void) {
 	while (REG_VCOUNT != 191) swiDelay(100);
 	while (REG_VCOUNT == 191) swiDelay(100);
+
+	#ifndef TWLSDK
+	if (igmResident) {
+		// Stays in its window. Released here, at the start of VBlank, the game takes its
+		// pending VBlank IRQ when a VBlank is really on: it sees one late frame
+		sharedAddr[5] = 0x444D4749; // 'IGMD'
+		return;
+	}
+	#endif
 
 	const u32 igmLocation = INGAME_MENU_LOCATION;
 

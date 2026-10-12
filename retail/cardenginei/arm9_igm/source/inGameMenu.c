@@ -897,27 +897,43 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 
 	u16 masterBright = *(vu16*)0x0400106C;
 
-	REG_DISPCNT_SUB = MODE_0_2D | DISPLAY_BG3_ACTIVE;
+	u16 bldcnt = REG_BLDCNT_SUB; // BLDCNT reads back on the DS (GBATEK: R/W)
+
+	// The menu needs a text BG at scroll 0, but BGxHOFS/VOFS are write-only, so the
+	// scroll it sets can't be put back. Use a BG whose scroll the game isn't showing:
+	// BG3 unless the game shows BG3 as a text BG (mode 0); then one it has switched off.
+	// Only a game showing all four BGs in mode 0 gets one scroll changed (BG3's).
+	int menuBg = 3;
+	if((dispcnt & 7) == 0 && (dispcnt & DISPLAY_BG3_ACTIVE)) {
+		for(int bg = 2; bg >= 0; bg--) {
+			if(!(dispcnt & (DISPLAY_BG0_ACTIVE << bg))) {
+				menuBg = bg;
+				break;
+			}
+		}
+	}
+
+	REG_DISPCNT_SUB = MODE_0_2D | (DISPLAY_BG0_ACTIVE << menuBg);
 	REG_BG0CNT_SUB = 0;
 	REG_BG1CNT_SUB = 0;
 	REG_BG2CNT_SUB = 0;
-	REG_BG3CNT_SUB = (u16)(BG_MAP_BASE(15) | BG_TILE_BASE(0) | BgSize_T_256x256);
+	REG_BG3CNT_SUB = 0;
+	BGCTRL_SUB[menuBg] = (u16)(BG_MAP_BASE(15) | BG_TILE_BASE(0) | BgSize_T_256x256);
 
 	if(VRAM_C_CR & 4) // If VRAM C is mapped to sub bg, unmap it
 		VRAM_C_CR = VRAM_C_LCD;
 	VRAM_H_CR = VRAM_ENABLE | VRAM_H_SUB_BG;
 
-	REG_BG3VOFS_SUB = 0;
-	REG_BG3HOFS_SUB = 0;
+	*(vu16*)(0x04001010 + menuBg * 4) = 0; // BGxHOFS_SUB
+	*(vu16*)(0x04001012 + menuBg * 4) = 0; // BGxVOFS_SUB
 
 	// If main screen is on auto, then force the bottom
 	REG_POWERCNT |= POWER_SWAP_LCDS;
 
 	SetBrightness(1, 0);
-	REG_MOSAIC_SUB = 0; // Register is write only, can't back up
-	REG_BLDCNT_SUB = 0; // Register is write only, can't back up
-	REG_BLDALPHA_SUB = 0; // Register is write only, can't back up
-	REG_BLDY_SUB = 0; // Register is write only, can't back up
+	// Blending off. Mosaic (no BG has its bit set now), BLDALPHA and BLDY (no effect
+	// with BLDCNT 0) are left alone: MOSAIC and BLDY are write-only and couldn't be restored
+	REG_BLDCNT_SUB = 0;
 
 	tonccpy(bgMapBak, BG_MAP_RAM_SUB(15), sizeof(bgMapBak));	// Backup BG_MAP_RAM
 	clearScreen(false);
@@ -1113,6 +1129,7 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 	tonccpy(BG_GFX_SUB, bgBak, sizeof(igmText.font) * 4);	// Restore the original graphics
 
 	*(vu16*)0x0400106C = masterBright;
+	REG_BLDCNT_SUB = bldcnt;
 
 	REG_DISPCNT_SUB = dispcnt;
 	REG_BG0CNT_SUB = bg0cnt;

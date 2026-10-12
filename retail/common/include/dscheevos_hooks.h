@@ -97,6 +97,16 @@ typedef struct DScheevosStatus {
 	u32 unlocksSent;
 	u32 tlsHandshakeMs;
 	u32 netRejoins; // times the module reassociated (AP drop, group rekey)
+	// self-timing in scanlines (263 a frame, ~4,260 ARM9 cycles each at 67 MHz)
+	u32 timedFrames;
+	u32 irqLinesLast; // the module's VBlank work, inside the game's IPC IRQ
+	u32 irqLinesMax;
+	u32 irqLinesTotal;
+	u32 idleLinesLast; // idle work (halt path) in the last frame
+	u32 idleLinesMax;
+	u32 idleLinesTotal;
+	u32 idleNone; // frames with no idle pass
+	u32 idleCut; // idle passes a VBlank preempted
 } DScheevosStatus;
 
 enum {

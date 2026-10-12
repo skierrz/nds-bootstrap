@@ -16,6 +16,7 @@
 
 typedef volatile uint16_t vu16;
 typedef volatile uint32_t vu32;
+#define REG_VCOUNT_SHIM (*(vu16*)0x04000006)
 
 #define SDIO_BASE 0x04004A00u
 #define R16(o) (*(vu16*)(SDIO_BASE + (o)))
@@ -50,12 +51,22 @@ enum {
  * is ~1-1.3 ms: far above a CMD52 (~10 us) or a 128-byte block (~17 us at
  * HCLK/2, 4-bit), far below a frame. Runs with IRQs off inside the game's
  * VBlank handler, so this bounds the worst case stall. */
-#define SPIN 3000u
+#define POLL_SPINS 2500u   /* wait-loop passes for a whole poll (~1 ms), shared by every wait */
+#define POLL_LINES 4u       /* no new RX frame once a poll has used this many scanlines */
 #define BACKOFF_POLLS 60u   /* after an SDIO error: skip ~1 s of VBlanks */
 #define DEAD_AFTER 5u       /* consecutive failed polls: give up (ARM9 sees dead=1) */
 
 static shim_shared_t* sh;
 static uint32_t backoff, fails;
+static uint32_t spins;      /* left in this poll; a stuck chip can't hold the game's IRQ longer */
+
+static int spin(void)
+{
+  if (!spins)
+    return 0;
+  spins--;
+  return 1;
+}
 
 static void fail(uint32_t step)
 {
@@ -67,7 +78,7 @@ static void fail(uint32_t step)
 
 static int wait_idle(void)
 {
-  for (uint32_t i = 0; i < SPIN; i++)
+  while (spin())
     if (!(R16(STAT1) & STAT1_BUSY))
       return 0;
   return -1;
@@ -85,7 +96,7 @@ static void start(uint16_t cmd, uint32_t arg)
 /* Wait until all bits of need0 are set in STAT0 or an error shows up. */
 static int wait_stat0(uint16_t need0)
 {
-  for (uint32_t i = 0; i < SPIN; i++) {
+  while (spin()) {
     if (R16(STAT1) & STAT1_ERR)
       return -1;
     if ((R16(STAT0) & need0) == need0)
@@ -127,9 +138,8 @@ static int cmd53_read(uint32_t addr, uint32_t* dst, uint32_t nblk)
   setup_blocks(nblk, 0x0C02);
   start(TMIO_CMD53_READ, (1u << 28) | (1u << 27) | (1u << 26) | ((addr & 0x1FFFF) << 9) | nblk);
   for (uint32_t b = 0; b < nblk; b++) {
-    uint32_t i = 0;
     while (!(R16(IRQ32) & IRQ32_RXFULL)) {
-      if ((R16(STAT1) & STAT1_ERR) || ++i == SPIN) { fail(4); return -1; }
+      if ((R16(STAT1) & STAT1_ERR) || !spin()) { fail(4); return -1; }
     }
     for (uint32_t w = 0; w < SHIM_BLOCK / 4; w++)
       *dst++ = R32(FIFO32);
@@ -146,9 +156,8 @@ static int cmd53_write(uint32_t addr, const uint32_t* src, uint32_t nblk)
   setup_blocks(nblk, 0x1402);
   start(TMIO_CMD53_WRITE, 0x80000000u | (1u << 28) | (1u << 27) | (1u << 26) | ((addr & 0x1FFFF) << 9) | nblk);
   for (uint32_t b = 0; b < nblk; b++) {
-    uint32_t i = 0;
     while (!(R16(STAT1) & STAT1_TXRQ)) {
-      if ((R16(STAT1) & STAT1_ERR) || ++i == SPIN) { fail(7); return -1; }
+      if ((R16(STAT1) & STAT1_ERR) || !spin()) { fail(7); return -1; }
     }
     R16(STAT1) = (uint16_t)~STAT1_TXRQ;
     for (uint32_t w = 0; w < SHIM_BLOCK / 4; w++)
@@ -198,11 +207,14 @@ static uint32_t read_lookahead(void)
   return la;
 }
 
-/* One pass: at most one TX frame and SHIM_RX_PER_POLL RX frames.
- * Returns a bitmask of what it did (1 = sent, 2 = received). */
+/* One pass, inside the game's VBlank IRQ: at most one TX frame, then up to
+ * SHIM_RX_PER_POLL RX frames (one if a frame was sent), while the poll is
+ * under POLL_LINES scanlines. All waits share one spin budget, and the first
+ * error ends the poll. Returns a bitmask of what it did (1 = sent, 2 = received). */
 uint32_t shim_poll(void)
 {
-  uint32_t did = 0;
+  uint32_t did = 0, rx_max = SHIM_RX_PER_POLL;
+  uint32_t line0 = REG_VCOUNT_SHIM;
   if (!sh || !sh->run || sh->dead)
     return 0;
   if (backoff) {
@@ -211,6 +223,7 @@ uint32_t shim_poll(void)
   }
   uint32_t errors_before = sh->stats.sdio_errors;
   sh->stats.polls++;
+  spins = POLL_SPINS;
 
   uint32_t tail = sh->tx_tail;
   if (tail != sh->tx_head) {
@@ -221,9 +234,13 @@ uint32_t shim_poll(void)
       sh->stats.tx_frames++;
     sh->tx_tail = tail + 1;       /* dropped on error: the ARM9 stack retransmits */
     did |= 1;
+    rx_max = 1;
   }
 
-  for (uint32_t k = 0; k < SHIM_RX_PER_POLL; k++) {
+  for (uint32_t k = 0; k < rx_max && sh->stats.sdio_errors == errors_before; k++) {
+    uint32_t line = REG_VCOUNT_SHIM;
+    if ((line + 263 - line0) % 263 >= POLL_LINES)
+      break;
     int st = cmd52(1, F1_HOST_INT_STATUS, 0, 0);
     if (st < 0)
       break;

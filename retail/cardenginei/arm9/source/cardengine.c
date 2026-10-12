@@ -1625,13 +1625,6 @@ void myIrqHandlerIPC(void) {
 #ifndef GSDD
 	const int ipcGetSync = IPC_GetSync();
 
-	#ifndef TWLSDK
-	if (ce9->valueBits & DSCHEEVOS_VALUEBIT) {
-		// DScheevos: snapshots once per ARM7 VBlank count, so any IPC sync IRQ may carry it
-		(*(void (**)(void))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK))();
-	}
-	#endif
-
 	if (sharedAddr[4] == 0x39414D44) {
 		sharedAddr[4] = 0;
 		extern bool dmaDirectRead;
@@ -1645,6 +1638,14 @@ void myIrqHandlerIPC(void) {
 		}
 		#endif
 	}
+
+	#ifndef TWLSDK
+	if (ce9->valueBits & DSCHEEVOS_VALUEBIT) {
+		// DScheevos: snapshots once per ARM7 VBlank count, so any IPC sync IRQ may carry it.
+		// After the card-read DMA continuation, so ROM streaming never waits for it
+		(*(void (**)(void))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK))();
+	}
+	#endif
 
 	switch (ipcGetSync) {
 		case 0x3:

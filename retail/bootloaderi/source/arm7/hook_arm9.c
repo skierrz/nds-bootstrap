@@ -12,6 +12,8 @@
 #include "value_bits.h"
 #include "nocashMessage.h"
 
+extern bool dscheevosWanted(void);
+
 #define b_saveOnFlashcard BIT(0)
 #define b_ROMinRAM BIT(1)
 #define b_eSdk2 BIT(2)
@@ -367,7 +369,6 @@ int hookNdsRetailArm9(
 				} else {
 					size = (consoleModel > 0 ? dev_CACHE_ADRESS_SIZE : retail_CACHE_ADRESS_SIZE);
 				}
-				extern bool dscheevosWanted(void);
 				if (dscheevosWanted() && ce9->cacheAddress + size > DSCHEEVOS_CACHE_END) {
 					size = DSCHEEVOS_CACHE_END - ce9->cacheAddress; // leave RAM for DScheevos
 				}
@@ -434,7 +435,8 @@ int hookNdsRetailArm9(
 			const u16 cacheSlotsUnchanged = ce9->cacheSlots;
 			for (int slot = 0; slot < cacheSlotsUnchanged; slot++) {
 				romLocationAdjust(ndsHeader, laterSdk, (ce9->valueBits & b_isSdk5), &addr, cacheBlockSize);
-				if (addr >= 0x0C000000 && addr < (consoleModel > 0 ? 0x0E000000 : 0x0D000000-cacheBlockSize)) {
+				if (addr >= 0x0C000000 && addr < (consoleModel > 0 ? 0x0E000000 : 0x0D000000-cacheBlockSize)
+				 && (!dscheevosWanted() || addr + cacheBlockSize <= DSCHEEVOS_CACHE_END)) { // the skipped holes push slots past the cut size
 					cacheAddressTable[slot] = addr;
 					addr += cacheBlockSize;
 				} else {
@@ -461,7 +463,8 @@ int hookNdsRetailArm9(
 			const u16 cacheSlotsUnchanged = ce9->cacheSlots;
 			for (int slot = 0; slot < cacheSlotsUnchanged; slot++) {
 				romLocationAdjust(ndsHeader, laterSdk, (ce9->valueBits & b_isSdk5), &addr, cacheBlockSize);
-				if (addr >= 0x0C000000 && addr < (consoleModel > 0 ? 0x0E000000 : 0x0D000000-cacheBlockSize)) {
+				if (addr >= 0x0C000000 && addr < (consoleModel > 0 ? 0x0E000000 : 0x0D000000-cacheBlockSize)
+				 && (!dscheevosWanted() || addr + cacheBlockSize <= DSCHEEVOS_CACHE_END)) { // the skipped holes push slots past the cut size
 					cacheAddressTable[slot] = addr;
 					addr += cacheBlockSize;
 				} else {

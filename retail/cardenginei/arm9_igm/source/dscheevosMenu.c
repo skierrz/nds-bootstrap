@@ -113,6 +113,25 @@ static int printNum(int x, int y, u32 val, FontPalette palette) {
 	return x + digits;
 }
 
+// Prints total / count with one decimal ("12.3"); returns the x after it
+static int printTenths(int x, int y, u32 total, u32 count, FontPalette palette) {
+	const u32 whole = total / count;
+	x = printNum(x, y, whole, palette);
+	printChar(x, y, '.', palette, false);
+	printChar(x + 1, y, '0' + ((total - whole * count) * 10) / count, palette, false);
+	return x + 2;
+}
+
+// Module self-timing: average/max scanlines a frame (263 a frame, about
+// 4,260 ARM9 cycles each at 67 MHz)
+static void printLines(int y, const char* label, u32 total, u32 max, u32 count) {
+	print(1, y, (const unsigned char*)label, FONT_DARKER_GRAY, false);
+	int x = printTenths(16, y, total, count, FONT_DARKER_GRAY);
+	printChar(x, y, '/', FONT_DARKER_GRAY, false);
+	x = printNum(x + 1, y, max, FONT_DARKER_GRAY);
+	print(x + 1, y, (const unsigned char*)"lines", FONT_DARKER_GRAY, false);
+}
+
 static void waitFrame(void) {
 	while (REG_VCOUNT != 191);
 	while (REG_VCOUNT == 191);
@@ -224,15 +243,25 @@ static void drawSummary(const DScheevosStatus* s) {
 			printNum(x + 10, 16, s->pendingRequests, FONT_WHITE);
 		}
 	}
-	print(1, 18, (const unsigned char*)"Frames checked", FONT_DARKER_GRAY, false);
-	printNum(16, 18, s->framesEvaluated, FONT_DARKER_GRAY);
+	y = 17;
+	print(1, y, (const unsigned char*)"Frames checked", FONT_DARKER_GRAY, false);
+	printNum(16, y++, s->framesEvaluated, FONT_DARKER_GRAY);
 	if (s->framesDropped) {
-		print(1, 19, (const unsigned char*)"Frames skipped", FONT_RED, false);
-		printNum(16, 19, s->framesDropped, FONT_RED);
+		print(1, y, (const unsigned char*)"Frames skipped", FONT_RED, false);
+		printNum(16, y++, s->framesDropped, FONT_RED);
 	}
 	if (s->netRejoins) {
-		print(1, 20, (const unsigned char*)"Wi-Fi rejoins", FONT_DARKER_GRAY, false);
-		printNum(16, 20, s->netRejoins, FONT_DARKER_GRAY);
+		print(1, y, (const unsigned char*)"Wi-Fi rejoins", FONT_DARKER_GRAY, false);
+		printNum(16, y++, s->netRejoins, FONT_DARKER_GRAY);
+	}
+	if (s->timedFrames) {
+		// what the module costs the game in its IRQ, and what it uses of idle time
+		printLines(y++, "IRQ cost", s->irqLinesTotal, s->irqLinesMax, s->timedFrames);
+		printLines(y++, "Idle use", s->idleLinesTotal, s->idleLinesMax, s->timedFrames);
+		if (s->idleNone && y <= 21) {
+			print(1, y, (const unsigned char*)"Frames no idle", FONT_DARKER_GRAY, false);
+			printNum(16, y, s->idleNone, FONT_DARKER_GRAY);
+		}
 	}
 	print(1, 22, (const unsigned char*)"RIGHT: List  B: Back", FONT_LIGHT_GRAY, false);
 }

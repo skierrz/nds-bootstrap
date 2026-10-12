@@ -1066,14 +1066,35 @@ u32 dataToPreloadFullSize(void) {
 	return dataToPreloadSizeAlign[0] + dataToPreloadSizeAlign[1] + dataToPreloadSizeAlign[2] + dataToPreloadSizeAlign[3];
 }
 
-bool dataToPreloadFound(const tNDSHeader* ndsHeader) {
+static bool dataToPreloadFits(const tNDSHeader* ndsHeader, const u32 dscheevosReserve) {
 	if (strncmp(ndsHeader->gameCode, "UBR", 3) == 0) {
 		return (dataToPreloadSize[0] > 0 && dataToPreloadFullSize() <= retail_CACHE_ADRESS_SIZE_BROWSER-0x40000);
 	}
 	const bool cheatsEnabled = (cheatSizeTotal > 4 && cheatSizeTotal <= 0x8000);
-	const u32 dscheevosReserve = dscheevosWanted() ? DSCHEEVOS_CACHE_RESERVE : 0;
 
 	return (dataToPreloadSize[0] > 0 && dataToPreloadFullSize() + dscheevosReserve <= (consoleModel > 0 ? (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? dev_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : dev_CACHE_ADRESS_SIZE_TWLSDK) : dev_CACHE_ADRESS_SIZE_DSIMODE) : dev_CACHE_ADRESS_SIZE) : (dsiModeConfirmed ? (ndsHeader->unitCode > 0 ? (cheatsEnabled ? retail_CACHE_ADRESS_SIZE_TWLSDK_CHEAT : retail_CACHE_ADRESS_SIZE_TWLSDK) : retail_CACHE_ADRESS_SIZE_DSIMODE) : retail_CACHE_ADRESS_SIZE))-0x40000);
+}
+
+bool dataToPreloadFound(const tNDSHeader* ndsHeader) {
+	return dataToPreloadFits(ndsHeader, dscheevosWanted() ? DSCHEEVOS_CACHE_RESERVE : 0);
+}
+
+// DScheevos: the module's RAM comes out of the ROM cache. A preload that fits
+// without that cut but not with it would be skipped whole, and the game would
+// read all of it from SD during play (longer loads, e.g. Mario Kart DS). Keep
+// as much of it as fits instead: trim from the end, one 16 KB block at a time.
+static void dscheevosTrimPreload(const tNDSHeader* ndsHeader) {
+	if (!dscheevosWanted() || dataToPreloadFound(ndsHeader) || !dataToPreloadFits(ndsHeader, 0)) {
+		return;
+	}
+	for (int i = 3; i >= 0 && !dataToPreloadFound(ndsHeader); i--) {
+		while (dataToPreloadSize[i] > 0 && !dataToPreloadFound(ndsHeader)) {
+			dataToPreloadSize[i] = (dataToPreloadSize[i] - 1) & ~0x3FFF;
+		}
+	}
+	dbg_printf("DScheevos: preload trimmed to ");
+	dbg_hexa(dataToPreloadFullSize());
+	dbg_printf("\n");
 }
 
 static void loadROMPartIntoRAM(const tNDSHeader* ndsHeader, aFile* file) {
@@ -2382,6 +2403,9 @@ int arm7_main(void) {
 
 		// If possible, set to load ROM into RAM
 		const u32 ROMinRAM = isROMLoadableInRAM(&dsiHeaderTemp, &dsiHeaderTemp.ndshdr, romTid, moduleParams, usesCloneboot);
+		if (!ROMinRAM) {
+			dscheevosTrimPreload(ndsHeader);
+		}
 
 		errorCode = patchCardNds(
 			(cardengineArm7*)ce7Location,

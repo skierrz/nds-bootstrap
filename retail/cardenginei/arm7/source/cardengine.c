@@ -1878,6 +1878,13 @@ static void dscheevosNetPoll(const u16 powcnt2, const u16 powerUs, const bool ga
 		*(vu16*)0x04004C04 &= ~BIT(8);	// back to the DSi chip
 		dscheevosNtrSelected = 0;
 	}
+	// Never next to a ROM read: in melonDS, Wi-Fi SDIO traffic during the
+	// card engine's in-flight SD reads made them fail until the game hung
+	// (Kirby Super Star Ultra's attract demo). The network can wait a frame.
+	if (readOngoing) {
+		ring->stats.paused_card_read++;
+		return;
+	}
 	if (!dscheevosNetAttached) {
 		shim_attach(ring);
 		dscheevosNetAttached = 1;

@@ -469,6 +469,15 @@ static void sdmmc_send_command_nonblocking_ndma(struct mmcdevice *ctx, u32 cmd, 
             //nocashMessage("cmd busy");
             break;
 		} 
+        else if (sdmmc_read16(REG_SDSTATUS0) & TMIO_STAT0_CMDRESPEND)
+        {
+            // DScheevos: the response came in already, so CMD_BUSY was missed:
+            // an IRQ ran between the command write and the read above for
+            // longer than the command takes on the bus (~12-20 us; e.g. a
+            // game's ARM7 timer IRQ, ~120 us). Waiting for CMD_BUSY then spins
+            // forever, so return; check_command finishes the read.
+            break;
+        }
         else if (strncmp((const char*)0x04FFFA00, "no$gba", 6) == 0)
         {
             // command is finished already without going busy : return

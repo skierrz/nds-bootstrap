@@ -1878,9 +1878,10 @@ static void dscheevosNetPoll(const u16 powcnt2, const u16 powerUs, const bool ga
 		*(vu16*)0x04004C04 &= ~BIT(8);	// back to the DSi chip
 		dscheevosNtrSelected = 0;
 	}
-	// Never next to a ROM read: in melonDS, Wi-Fi SDIO traffic during the
-	// card engine's in-flight SD reads made them fail until the game hung
-	// (Kirby Super Star Ultra's attract demo). The network can wait a frame.
+	// Never next to a ROM read: keep Wi-Fi SDIO traffic away from the card
+	// engine's in-flight SD reads. The network can wait a frame. (Kirby Super
+	// Star Ultra's attract-demo hang was a CMD_BUSY race in my_sdmmc.c, not
+	// this; see sdmmc_send_command_nonblocking_ndma.)
 	if (readOngoing) {
 		ring->stats.paused_card_read++;
 		return;

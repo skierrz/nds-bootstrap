@@ -200,6 +200,7 @@ u32 newArm7ibinarySize = 0;
 u32 oldArm7mbk = 0;
 
 u32 romMapLines = 0;
+static bool romMapOverflow = false;
 // 0: ROM part start, 1: ROM part start in RAM, 2: ROM part end in RAM
 u32 romMap[8][3] = {
 	{0, 0, 0},
@@ -1083,18 +1084,45 @@ bool dataToPreloadFound(const tNDSHeader* ndsHeader) {
 // without that cut but not with it would be skipped whole, and the game would
 // read all of it from SD during play (longer loads, e.g. Mario Kart DS). Keep
 // as much of it as fits instead: trim from the end, one 16 KB block at a time.
-static void dscheevosTrimPreload(const tNDSHeader* ndsHeader) {
-	if (!dscheevosWanted() || dataToPreloadFound(ndsHeader) || !dataToPreloadFits(ndsHeader, 0)) {
+static bool dscheevosRomMapFits(const tNDSHeader* ndsHeader, const module_params_t* moduleParams, const bool laterSdk, const bool usesCloneboot, const u32 ROMinRAM);
+static void dscheevosTrimPreload(const tNDSHeader* ndsHeader, const module_params_t* moduleParams, const bool laterSdk, const bool usesCloneboot) {
+	if (!dscheevosWanted() || !dataToPreloadFits(ndsHeader, 0)) {
 		return;
 	}
-	for (int i = 3; i >= 0 && !dataToPreloadFound(ndsHeader); i--) {
-		while (dataToPreloadSize[i] > 0 && !dataToPreloadFound(ndsHeader)) {
+	if (dataToPreloadFound(ndsHeader) && dscheevosRomMapFits(ndsHeader, moduleParams, laterSdk, usesCloneboot, 0)) {
+		return;
+	}
+	for (int i = 3; i >= 0; i--) {
+		while (dataToPreloadSize[i] > 0 && (!dataToPreloadFound(ndsHeader) || !dscheevosRomMapFits(ndsHeader, moduleParams, laterSdk, usesCloneboot, 0))) {
 			dataToPreloadSize[i] = (dataToPreloadSize[i] - 1) & ~0x3FFF;
+		}
+		if (dataToPreloadFound(ndsHeader) && dscheevosRomMapFits(ndsHeader, moduleParams, laterSdk, usesCloneboot, 0)) {
+			break;
 		}
 	}
 	dbg_printf("DScheevos: preload trimmed to ");
 	dbg_hexa(dataToPreloadFullSize());
 	dbg_printf("\n");
+}
+
+// DScheevos: the module and its session live in the RAM the ROM cache gave up,
+// from DSCHEEVOS_CACHE_END (0x0CD80000, uncached) on. A ROM or preload whose
+// map runs past it would be loaded over the module, or the module over it.
+// Build the map as buildRomMap() will, and check every piece ends by then.
+static void buildRomMap(const tNDSHeader* ndsHeader, const module_params_t* moduleParams, const bool laterSdk, const bool usesCloneboot, const u32 ROMinRAM);
+static bool dscheevosRomMapFits(const tNDSHeader* ndsHeader, const module_params_t* moduleParams, const bool laterSdk, const bool usesCloneboot, const u32 ROMinRAM) {
+	romMapLines = 0;
+	romMapOverflow = false;
+	buildRomMap(ndsHeader, moduleParams, laterSdk, usesCloneboot, ROMinRAM);
+	bool fits = !romMapOverflow;
+	for (u32 i = 0; i < romMapLines; i++) {
+		if (romMap[i][1] < 0x0C000000 || romMap[i][2] > DSCHEEVOS_CACHE_END) {
+			fits = false;
+		}
+	}
+	romMapLines = 0;
+	romMapOverflow = false;
+	return fits;
 }
 
 static void loadROMPartIntoRAM(const tNDSHeader* ndsHeader, aFile* file) {
@@ -1302,6 +1330,10 @@ static void buildRomMap(const tNDSHeader* ndsHeader, const module_params_t* modu
 			// dbg_hexa(romLocationChangePrep);
 
 			if (readRom) {
+				if (romMapLines >= sizeof(romMap)/sizeof(romMap[0])) {
+					romMapOverflow = true; // more pieces than the card engine's map holds
+					return;
+				}
 				romMap[romMapLines][0] = romOffsetChange;
 				romMap[romMapLines][1] = romLocationChange;
 				romMap[romMapLines][2] = romLocationChange+romBlockSize;
@@ -2402,9 +2434,14 @@ int arm7_main(void) {
 		}
 
 		// If possible, set to load ROM into RAM
-		const u32 ROMinRAM = isROMLoadableInRAM(&dsiHeaderTemp, &dsiHeaderTemp.ndshdr, romTid, moduleParams, usesCloneboot);
+		u32 ROMinRAM = isROMLoadableInRAM(&dsiHeaderTemp, &dsiHeaderTemp.ndshdr, romTid, moduleParams, usesCloneboot);
+		if (ROMinRAM && dscheevosWanted() && !dscheevosRomMapFits(ndsHeader, moduleParams, laterSdk, usesCloneboot, ROMinRAM)) {
+			dbg_printf("DScheevos: ROM doesn't fit beside the module, cache mode\n");
+			ROMinRAM = 0;
+			sharedWramEnabled = false;
+		}
 		if (!ROMinRAM) {
-			dscheevosTrimPreload(ndsHeader);
+			dscheevosTrimPreload(ndsHeader, moduleParams, laterSdk, usesCloneboot);
 		}
 
 		errorCode = patchCardNds(
@@ -2488,8 +2525,6 @@ int arm7_main(void) {
 			usesCloneboot
 		);
 
-		dscheevosSetup((cardengineArm7*)ce7Location, (cardengineArm9*)ce9Location, ndsHeader);
-
 		patchOffsetCacheFileNewCrc = swiCRC16(0xFFFF, &patchOffsetCache, sizeof(patchOffsetCacheContents));
 		if (patchOffsetCacheFileNewCrc != patchOffsetCacheFilePrevCrc) {
 			fileWrite((char*)&patchOffsetCache, &patchOffsetCacheFile, 0, sizeof(patchOffsetCacheContents));
@@ -2558,6 +2593,12 @@ int arm7_main(void) {
 		if (!ROMinRAM && dsiWramAccess && !dsiWramMirrored && (!ROMsupportsDsiMode(ndsHeader) || !dsiModeConfirmed)) {
 			loadNitroFileInfoIntoRAM(ndsHeader, romFile);
 		}
+
+		// DScheevos: after the ROM, overlay and preload loads above, which use the
+		// cache area (the AP-fix overlays pass through 0x0C800000-0x0CF00000 and
+		// are zeroed there), and before the page file saves the ARM9 binary with
+		// the OS_Halt patch in it.
+		dscheevosSetup((cardengineArm7*)ce7Location, (cardengineArm9*)ce9Location, ndsHeader);
 
 		if (isDSiWare && dsiWareAsSlot1) {
 			aFile* sharedFontFile = (aFile*)FONT_FILE_LOCATION_TWLSDK;

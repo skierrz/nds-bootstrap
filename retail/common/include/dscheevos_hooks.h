@@ -18,7 +18,7 @@
 #define DSCHEEVOS_CACHE_RESERVE   0x0027C000  // ROM cache lost to the cut: 159 of 760 16 KB slots, every layout
 
 #define DSCHEEVOS_MAGIC           0x56435344  // "DSCV"
-#define DSCHEEVOS_VERSION         6
+#define DSCHEEVOS_VERSION         7
 #define DSCHEEVOS_SESSION_MAGIC   0x53435344  // "DSCS"
 
 // header words

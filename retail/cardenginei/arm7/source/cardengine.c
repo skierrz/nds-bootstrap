@@ -2060,8 +2060,9 @@ static void dscheevosLedCues(const bool gameWifi) {
 }
 
 static void dscheevosVBlank(void) {
+	// The module reads this count in the game's idle time: no IPC sync to the ARM9
+	// (DScheevos adds no IRQ and no code to the game's ARM9 interrupt path).
 	(*(vu32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_VBLANK_COUNT))++;
-	IPC_SendSync(0xA);
 	const u16 powcnt2 = REG_POWERCNT;
 	const u16 powerUs = (powcnt2 & BIT(1)) ? *(vu16*)0x04808036 : 1;
 	const bool gameWifi = (powcnt2 & BIT(1)) && !(powerUs & BIT(0));

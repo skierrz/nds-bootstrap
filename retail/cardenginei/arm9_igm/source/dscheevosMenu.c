@@ -16,10 +16,21 @@
 #define KEYS sharedAddr[5]
 #define LIST_ROWS 10 // two lines each
 
+// The end of the module's RAM in the view p uses: the module may keep its data in
+// the 0x0C000000 mirror of the same RAM (uncached on most games), and then the menu
+// reads it there too, so both see the same cache lines. 0 if p is in neither view.
+static u32 moduleEnd(u32 p) {
+	const u32 mirror = DSCHEEVOS_LOCATION + 0x0A000000;
+	if (p >= DSCHEEVOS_LOCATION && p < DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE) return DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE;
+	if (p >= mirror && p < mirror + DSCHEEVOS_SIZE) return mirror + DSCHEEVOS_SIZE;
+	return 0;
+}
+
 // A module pointer, if it points inside the module's RAM with room for `size` bytes
 static const void* modulePtr(u32 offset, u32 size) {
 	const u32 p = *(u32*)(DSCHEEVOS_LOCATION + offset);
-	if (p < DSCHEEVOS_LOCATION || p + size > DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE) {
+	const u32 end = moduleEnd(p);
+	if (!end || size > end - p) {
 		return NULL;
 	}
 	return (const void*)p;
@@ -36,7 +47,7 @@ static const DScheevosStatus* dscheevosStatus(void) {
 static const DScheevosList* dscheevosList(void) {
 	const DScheevosList* l = (const DScheevosList*)modulePtr(DSCHEEVOS_H_LIST, sizeof(DScheevosList));
 	if (!l || l->magic != DSCHEEVOS_LIST_MAGIC || l->entrySize != sizeof(DScheevosListEntry)
-	 || l->count > (DSCHEEVOS_LOCATION + DSCHEEVOS_SIZE - (u32)l - sizeof(DScheevosList)) / sizeof(DScheevosListEntry)) {
+	 || l->count > (moduleEnd((u32)l) - (u32)l - sizeof(DScheevosList)) / sizeof(DScheevosListEntry)) {
 		return NULL;
 	}
 	return l;

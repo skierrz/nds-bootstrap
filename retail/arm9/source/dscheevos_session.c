@@ -73,6 +73,9 @@ void dscheevosFindSession(configuration* conf) {
 		conf->dscheevosPendingCluster = stPending.st_ino;
 	}
 	if (((const u8*)head)[DSCHEEVOS_S_HARDCORE]) {
-		conf->cheatSize = 0; // hardcore: no cheats (AP-fix: built-in patches only, see above)
+		// hardcore: no user cheats, and no wideCheatData.bin (any AR codes put
+		// there run like cheats). AP-fix: built-in patches only, see above.
+		conf->cheatSize = 0;
+		conf->wideCheatSize = 0;
 	}
 }

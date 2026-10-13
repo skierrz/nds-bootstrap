@@ -35,6 +35,12 @@ endif
 BUILD		:=	build
 SOURCES		:=	source source/flashcard source/polarssl source/twltool source/gm9i source/nand mbedtls libeasysave/source/ini ../common/source_general
 INCLUDES	:=	include include/flashcard include/polarssl include/twltool include/gm9i include/nand libeasysave/include ../common/include
+# DScheevos (with -DDSCHEEVOS_RCHASH): rcheevos' DS hash, from the rcheevos submodule next to this one
+ifneq ($(wildcard $(CURDIR)/../../../rcheevos/src/hash/rc_hash.c $(CURDIR)/../../../../rcheevos/src/hash/rc_hash.c),)
+SOURCES		+=	source/dscheevos_rchash
+INCLUDES	+=	../../../rcheevos/include
+DSCHEEVOS_DEFS	:=	-DDSCHEEVOS_RCHASH
+endif
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -46,7 +52,7 @@ CFLAGS	:=	-g -Wall -O2\
 			-ffast-math \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -DARM9 -DNO_CARDID -DDEFAULT_CARD_READ_DMA
+CFLAGS	+=	$(INCLUDE) -DARM9 -DNO_CARDID -DDEFAULT_CARD_READ_DMA $(DSCHEEVOS_DEFS)
 CXXFLAGS	:=	$(CFLAGS) -fno-rtti -fno-exceptions
 
 ASFLAGS	:=	-g $(ARCH) $(INCLUDE)

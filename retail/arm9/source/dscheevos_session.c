@@ -9,6 +9,7 @@
 #include <nds.h>
 #include <stdio.h>
 #include <string.h>
+#include <strings.h>
 #include <sys/stat.h>
 #include <time.h>
 #include "configuration.h"
@@ -90,7 +91,23 @@ void dscheevosSanitizeSoftReset(const configuration* conf, const char* srParamsP
 	fclose(f);
 }
 
-void dscheevosFindSession(configuration* conf) {
+#ifdef DSCHEEVOS_RCHASH
+// rcheevos' own hash (the launcher's code, unmodified), so a session can only
+// run on the ROM it was started for: matching the path and a fresh time
+// isn't enough when the console clock can be set back.
+extern int rc_hash_generate_from_file(char hash[33], uint32_t console_id, const char* path);
+#define RC_CONSOLE_NINTENDO_DS 18
+
+static int romMatchesSession(const configuration* conf, const u32* head) {
+	char hash[33] = {0};
+	if (!rc_hash_generate_from_file(hash, RC_CONSOLE_NINTENDO_DS, conf->ndsPath)) {
+		return 0;
+	}
+	return strncasecmp(hash, (const char*)head + DSCHEEVOS_S_GAME_HASH, 32) == 0;
+}
+#endif
+
+int dscheevosFindSession(configuration* conf) {
 	conf->dscheevosModuleCluster = 0;
 	conf->dscheevosSessionCluster = 0;
 	conf->dscheevosPendingCluster = 0;
@@ -98,13 +115,18 @@ void dscheevosFindSession(configuration* conf) {
 	u32 head[DSCHEEVOS_SESSION_HEAD / 4];
 	struct stat stModule, stSession;
 	if (!readSession(conf, head, &stModule, &stSession)) {
-		return;
+		return DSCHEEVOS_SESSION_NONE;
 	}
 
 	remove(DSCHEEVOS_DIR "session.used");
 	if (rename(DSCHEEVOS_DIR "session.bin", DSCHEEVOS_DIR "session.used") != 0) {
-		return;
+		return DSCHEEVOS_SESSION_NONE;
 	}
+#ifdef DSCHEEVOS_RCHASH
+	if (!romMatchesSession(conf, head)) {
+		return DSCHEEVOS_SESSION_WRONG_ROM; // used up, achievements off
+	}
+#endif
 	conf->dscheevosModuleCluster = stModule.st_ino;
 	conf->dscheevosSessionCluster = stSession.st_ino;
 	struct stat stPending;
@@ -117,4 +139,5 @@ void dscheevosFindSession(configuration* conf) {
 		conf->cheatSize = 0;
 		conf->wideCheatSize = 0;
 	}
+	return DSCHEEVOS_SESSION_OK;
 }

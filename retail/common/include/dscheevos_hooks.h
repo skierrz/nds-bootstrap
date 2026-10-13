@@ -49,7 +49,12 @@
 #define DSCHEEVOS_S_FILE_SIZE     0x08
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
 #define DSCHEEVOS_S_HARDCORE      0x1CD // u8
+#define DSCHEEVOS_S_GAME_HASH     0x1AC // char[33]: the ROM's RetroAchievements hash (lower-case hex)
 #define DSCHEEVOS_S_FLAGS         0x1CE // u8: DSCHEEVOS_BOOT_*
+// dscheevosFindSession()
+#define DSCHEEVOS_SESSION_NONE      0
+#define DSCHEEVOS_SESSION_OK        1
+#define DSCHEEVOS_SESSION_WRONG_ROM 2 // the ROM's hash isn't the session's: achievements off
 #define DSCHEEVOS_S_UNIX_TIME     0x1D4 // u32: console clock when the launcher wrote the file
 #define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
 #define DSCHEEVOS_S_CLOCK         0x1F7 // u8, set here in RAM only: DSCHEEVOS_CLOCK_*

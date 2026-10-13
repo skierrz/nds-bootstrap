@@ -20,7 +20,8 @@
 #include "conf_sd.h"
 #include "version.h"
 
-extern "C" void dscheevosFindSession(configuration* conf);
+#include "dscheevos_hooks.h"
+extern "C" int dscheevosFindSession(configuration* conf);
 
 #define REG_SCFG_EXT7 *(u32*)0x02FFFDF0
 
@@ -581,7 +582,13 @@ static int runNdsFile(configuration* conf) {
 		clusterTwlFont = stTwlFont.st_ino;
 	}
 
-	dscheevosFindSession(conf);
+	if (dscheevosFindSession(conf) == DSCHEEVOS_SESSION_WRONG_ROM) {
+		myConsoleDemoInit();
+		iprintf("DScheevos: this game file isn't\nthe one the session was started\nfor. Achievements are off.\n");
+		for (int i = 0; i < 60*3; i++) {
+			swiWaitForVBlank();
+		}
+	}
 
 	return runNds(st.st_ino, clusterSav, clusterDonor, /* clusterGba, clusterGbaSav, */ clusterQuit, clusterWideCheat, clusterApPatch, clusterApPatchPostCardRead, clusterDSi2DSSave, clusterCheat, clusterPatchOffsetCache, clusterRamDump, clusterSrParams, clusterScreenshot, apFixOverlaysCluster, musicCluster, clusterPageFile, clusterManual, clusterTwlFont, conf);
 }

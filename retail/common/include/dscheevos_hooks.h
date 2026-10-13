@@ -13,7 +13,7 @@
 #define DSCHEEVOS_SIZE            0x00200000
 #define DSCHEEVOS_IMAGE_MAX       0x00080000
 #define DSCHEEVOS_SESSION         (DSCHEEVOS_LOCATION + DSCHEEVOS_IMAGE_MAX)
-#define DSCHEEVOS_SESSION_MAX     0x00040000
+#define DSCHEEVOS_SESSION_MAX     0x00080000  // may run past the module's 256 KB arena (a set reply that big)
 #define DSCHEEVOS_CACHE_END       0x0CD80000  // ROM cache must end here (same RAM as DSCHEEVOS_LOCATION)
 #define DSCHEEVOS_CACHE_RESERVE   0x0027C000  // ROM cache lost to the cut: 159 of 760 16 KB slots, every layout
 

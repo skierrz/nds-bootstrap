@@ -50,6 +50,7 @@
 #define DSCHEEVOS_S_ROM_PATH      0x0C  // char[256]
 #define DSCHEEVOS_S_HARDCORE      0x1CD // u8
 #define DSCHEEVOS_S_FLAGS         0x1CE // u8: DSCHEEVOS_BOOT_*
+#define DSCHEEVOS_S_UNIX_TIME     0x1D4 // u32: console clock when the launcher wrote the file
 #define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
 #define DSCHEEVOS_S_AP_SSID       0x210 // char[32]: the access point the launcher joined
 #define DSCHEEVOS_S_AP_SSID_LEN   0x230 // u8

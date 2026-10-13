@@ -230,6 +230,18 @@ static void disable(const char* why) {
 	dbg_printf("\n");
 }
 
+// session.used keeps its clusters; once the session is in RAM its contents
+// are zeroed, so the file can't be booted again (and the login token in it
+// doesn't stay on the SD card).
+static void wipeSession(aFile* file, const u32 size) {
+	static u32 zero[128];
+	dscheevosNetWanted(); // both read the file once and keep the answer
+	dscheevosHardcore();
+	for (u32 i = 0; i < size; i += sizeof(zero)) {
+		fileWrite((char*)zero, file, i, (size - i < sizeof(zero)) ? size - i : sizeof(zero));
+	}
+}
+
 void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* ndsHeader) {
 	if (!dscheevosWanted()) {
 		return;
@@ -256,6 +268,7 @@ void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* 
 		return;
 	}
 	fileRead((char*)session, &file, 0, sessionSize);
+	wipeSession(&file, sessionSize);
 	if (session[DSCHEEVOS_S_SIZE / 4] != DSCHEEVOS_S_BOOT_SIZE || sessionSize < DSCHEEVOS_S_BOOT_SIZE) {
 		disable("old session");
 		return;

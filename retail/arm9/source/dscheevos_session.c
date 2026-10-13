@@ -10,15 +10,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <time.h>
 #include "configuration.h"
 #include "dscheevos_hooks.h"
 
 #define DSCHEEVOS_DIR "sd:/_nds/dscheevos/"
-#define DSCHEEVOS_SESSION_HEAD ((DSCHEEVOS_S_HARDCORE + 4) & ~3)
+#define DSCHEEVOS_SESSION_HEAD (DSCHEEVOS_S_UNIX_TIME + 4)
+// The launcher writes the session a few seconds before it boots
+// nds-bootstrap. An older one is a copy kept to replay a session: refused.
+#define DSCHEEVOS_SESSION_MAX_AGE   600 // s
+#define DSCHEEVOS_SESSION_MAX_AHEAD 120 // s, clock read twice
 
 // Reads the head of the session.bin the launcher wrote for this ROM.
-// Returns 0 when there is none, it's for another ROM, or achievements can't
-// run here: the boot is then stock.
+// Returns 0 when there is none, it's for another ROM or too old, or
+// achievements can't run here: the boot is then stock.
 static int readSession(const configuration* conf, u32* head, struct stat* stModule, struct stat* stSession) {
 	if (conf->b4dsMode || conf->bootstrapOnFlashcard || conf->gameOnFlashcard || conf->isDSiWare) {
 		return 0;
@@ -36,9 +41,11 @@ static int readSession(const configuration* conf, u32* head, struct stat* stModu
 	const size_t got = fread(head, 1, DSCHEEVOS_SESSION_HEAD, f);
 	fclose(f);
 	const char* romPath = (const char*)head + DSCHEEVOS_S_ROM_PATH;
+	const s32 age = (s32)((u32)time(NULL) - head[DSCHEEVOS_S_UNIX_TIME / 4]);
 	return got == DSCHEEVOS_SESSION_HEAD && head[0] == DSCHEEVOS_SESSION_MAGIC
 	 && head[DSCHEEVOS_S_FILE_SIZE / 4] == (u32)stSession->st_size
-	 && strncmp(romPath, conf->ndsPath, 256) == 0;
+	 && strncmp(romPath, conf->ndsPath, 256) == 0
+	 && age >= -DSCHEEVOS_SESSION_MAX_AHEAD && age <= DSCHEEVOS_SESSION_MAX_AGE;
 }
 
 // Hardcore: nds-bootstrap applies only its built-in AP-fix patches

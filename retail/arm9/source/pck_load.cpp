@@ -7,6 +7,7 @@
 
 extern off_t getFileSize(const char* path);
 extern off_t getFileSize(FILE* fp);
+extern "C" int dscheevosHardcorePending(const configuration* conf);
 
 static const char* getSdatPath(const char* romTid) {
 	if (strncmp(romTid, "CDZ", 3) == 0 // Dragon Ball: Origins
@@ -331,7 +332,8 @@ void loadAsyncLoadSettings(configuration* conf, const char* romTid, const u16 he
 }
 
 void loadApFix(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC) {
-	{
+	conf->apPatchPath[0] = 0;
+	if (!dscheevosHardcorePending(conf)) { // DScheevos hardcore: built-in patches only
 		std::string romFilename = conf->ndsPath;
 		const size_t last_slash_idx = romFilename.find_last_of("/");
 		if (std::string::npos != last_slash_idx)

@@ -164,7 +164,7 @@ static u32 getKey(void) {
 static void stateText(const DScheevosListEntry* e, const char** text, FontPalette* pal) {
 	switch (e->state) {
 		case DSCHEEVOS_ACH_UNLOCKED: *text = "Unlocked"; *pal = FONT_LIME; break;
-		case DSCHEEVOS_ACH_UNLOCKED_SOFTCORE: *text = "Softcore only"; *pal = FONT_LIGHT_BLUE; break;
+		case DSCHEEVOS_ACH_UNLOCKED_SOFTCORE: *text = "Casual only"; *pal = FONT_LIGHT_BLUE; break;
 		case DSCHEEVOS_ACH_DISABLED: *text = "Disabled"; *pal = FONT_DARKER_GRAY; break;
 		default: *text = "Locked"; *pal = FONT_WHITE; break;
 	}
@@ -177,12 +177,12 @@ static void drawSummary(const DScheevosStatus* s) {
 	fit(line, s->gameTitle, 30);
 	printCenter(16, 1, line, FONT_LIGHT_GRAY, false);
 
-	print(1, 3, (const unsigned char*)(s->hardcore ? "HARDCORE" : "Softcore"), s->hardcore ? FONT_RED : FONT_LIGHT_BLUE, false);
+	print(1, 3, (const unsigned char*)(s->hardcore ? "HARDCORE" : "Casual"), s->hardcore ? FONT_RED : FONT_LIGHT_BLUE, false);
 	if (s->hardcore) {
 		// hardcore rules always apply; whether RetroAchievements counts the
 		// unlocks as hardcore depends on it recognising this client
 		print(1, 4, (const unsigned char*)(s->hardcore == DSCHEEVOS_HARDCORE_REFUSED ?
-			"Rules on, RA counts as softcore" : "Not yet confirmed by RA"), FONT_LIGHT_GRAY, false);
+			"Rules on, RA counts as Casual" : "Not yet confirmed by RA"), FONT_LIGHT_GRAY, false);
 	}
 	x = printNum(11, 3, s->achievementsUnlocked, FONT_WHITE);
 	printChar(x, 3, '/', FONT_WHITE, false);

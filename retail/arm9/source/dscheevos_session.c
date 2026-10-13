@@ -14,34 +14,51 @@
 #include "dscheevos_hooks.h"
 
 #define DSCHEEVOS_DIR "sd:/_nds/dscheevos/"
+#define DSCHEEVOS_SESSION_HEAD ((DSCHEEVOS_S_HARDCORE + 4) & ~3)
+
+// Reads the head of the session.bin the launcher wrote for this ROM.
+// Returns 0 when there is none, it's for another ROM, or achievements can't
+// run here: the boot is then stock.
+static int readSession(const configuration* conf, u32* head, struct stat* stModule, struct stat* stSession) {
+	if (conf->b4dsMode || conf->bootstrapOnFlashcard || conf->gameOnFlashcard || conf->isDSiWare) {
+		return 0;
+	}
+	if (stat(DSCHEEVOS_DIR "dscheevos9.bin", stModule) < 0 || stat(DSCHEEVOS_DIR "session.bin", stSession) < 0) {
+		return 0;
+	}
+	if (stModule->st_size > DSCHEEVOS_IMAGE_MAX || stSession->st_size > DSCHEEVOS_SESSION_MAX) {
+		return 0;
+	}
+	FILE* f = fopen(DSCHEEVOS_DIR "session.bin", "rb");
+	if (!f) {
+		return 0;
+	}
+	const size_t got = fread(head, 1, DSCHEEVOS_SESSION_HEAD, f);
+	fclose(f);
+	const char* romPath = (const char*)head + DSCHEEVOS_S_ROM_PATH;
+	return got == DSCHEEVOS_SESSION_HEAD && head[0] == DSCHEEVOS_SESSION_MAGIC
+	 && head[DSCHEEVOS_S_FILE_SIZE / 4] == (u32)stSession->st_size
+	 && strncmp(romPath, conf->ndsPath, 256) == 0;
+}
+
+// Hardcore: nds-bootstrap applies only its built-in AP-fix patches
+// (nitro:/apfix.pck), never user files from _nds/nds-bootstrap/apFix/,
+// which could patch the game after the launcher hashed the clean ROM.
+// Called by loadApFix() before dscheevosFindSession(); both read the same file.
+int dscheevosHardcorePending(const configuration* conf) {
+	u32 head[DSCHEEVOS_SESSION_HEAD / 4];
+	struct stat stModule, stSession;
+	return readSession(conf, head, &stModule, &stSession) && ((const u8*)head)[DSCHEEVOS_S_HARDCORE];
+}
 
 void dscheevosFindSession(configuration* conf) {
 	conf->dscheevosModuleCluster = 0;
 	conf->dscheevosSessionCluster = 0;
 	conf->dscheevosPendingCluster = 0;
-	if (conf->b4dsMode || conf->bootstrapOnFlashcard || conf->gameOnFlashcard || conf->isDSiWare) {
-		return;
-	}
 
+	u32 head[DSCHEEVOS_SESSION_HEAD / 4];
 	struct stat stModule, stSession;
-	if (stat(DSCHEEVOS_DIR "dscheevos9.bin", &stModule) < 0 || stat(DSCHEEVOS_DIR "session.bin", &stSession) < 0) {
-		return;
-	}
-	if (stModule.st_size > DSCHEEVOS_IMAGE_MAX || stSession.st_size > DSCHEEVOS_SESSION_MAX) {
-		return;
-	}
-
-	u32 head[(DSCHEEVOS_S_HARDCORE + 4) / 4];
-	FILE* f = fopen(DSCHEEVOS_DIR "session.bin", "rb");
-	if (!f) {
-		return;
-	}
-	const size_t got = fread(head, 1, sizeof(head), f);
-	fclose(f);
-	const char* romPath = (const char*)head + DSCHEEVOS_S_ROM_PATH;
-	if (got != sizeof(head) || head[0] != DSCHEEVOS_SESSION_MAGIC
-	 || head[DSCHEEVOS_S_FILE_SIZE / 4] != (u32)stSession.st_size
-	 || strncmp(romPath, conf->ndsPath, 256) != 0) {
+	if (!readSession(conf, head, &stModule, &stSession)) {
 		return;
 	}
 
@@ -56,6 +73,6 @@ void dscheevosFindSession(configuration* conf) {
 		conf->dscheevosPendingCluster = stPending.st_ino;
 	}
 	if (((const u8*)head)[DSCHEEVOS_S_HARDCORE]) {
-		conf->cheatSize = 0; // hardcore: no cheats (AP-fix patches still apply)
+		conf->cheatSize = 0; // hardcore: no cheats (AP-fix: built-in patches only, see above)
 	}
 }

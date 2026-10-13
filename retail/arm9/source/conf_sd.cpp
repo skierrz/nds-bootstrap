@@ -182,6 +182,7 @@ extern bool extension(const std::string& filename, const char* ext);
 extern bool loadPreLoadSettings(configuration* conf, const char* pckPath, const char* romTid, const u16 headerCRC);
 extern void loadAsyncLoadSettings(configuration* conf, const char* romTid, const u16 headerCRC);
 extern void loadApFix(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
+extern "C" int dscheevosHardcorePending(const configuration* conf);
 extern "C" void dscheevosSanitizeSoftReset(const configuration* conf, const char* srParamsPath);
 // extern void loadApFixPostCardRead(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
 extern void loadMobiclipOffsets(configuration* conf, const char* bootstrapPath, const char* romTid, const u8 romVersion, const u16 headerCRC);
@@ -1033,6 +1034,12 @@ int loadFromSD(configuration* conf, const char *bootstrapPath) {
 					|| (unitCode == 2 && conf->dsiMode && romTid[0] == 'K')));
 	if (conf->isDSiWare && (totalRomSize >= 0x04000000 || conf->dsiWareSlot1Mode || !scfgSdmmcEnabled || !isDSiMode())) {
 		conf->valueBits4 |= BIT(0);
+	}
+	if (conf->useSdk20Donor && dscheevosHardcorePending(conf)) {
+		// DScheevos hardcore: no ARM7 binary from a user-chosen donor ROM (it
+		// runs input, sound and can write main RAM). The launcher doesn't offer
+		// hardcore when one is set; if one appears after, the game's own runs.
+		conf->useSdk20Donor = false;
 	}
 	bool dsiEnhancedMbk = false;
 	bool b4dsDebugRam = false;

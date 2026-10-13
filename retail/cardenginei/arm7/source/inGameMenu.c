@@ -127,7 +127,11 @@ void inGameMenu(void) {
 			while (REG_VCOUNT != 191) swiDelay(100);
 			while (REG_VCOUNT == 191) swiDelay(100);
 
-			switch (sharedAddr[4]) {
+			// Read the ARM9's command once. The ARM9 writes a new one (EXIT, say) right
+			// after a VBlank starts, just when this loop looks, so writing MENU back after
+			// an idle look could wipe it and leave the ARM9 waiting forever
+			const u32 command = sharedAddr[4];
+			switch (command) {
 				/* case 0x54495845: // EXIT
 					exitMenu = true;
 					break; */
@@ -237,10 +241,10 @@ void inGameMenu(void) {
 					break;
 			}
 
-			if (sharedAddr[4] == 0x54495845) { // EXIT
+			if (command == 0x54495845) { // EXIT
 				// returnToMenu = (sharedAddr[1]);
 				exitMenu = true;
-			} else if (!exitMenu) {
+			} else if (!exitMenu && command != 0x554E454D) { // done: the ARM9 waits for MENU
 				sharedAddr[4] = 0x554E454D; // MENU
 			}
 		}

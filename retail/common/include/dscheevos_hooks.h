@@ -52,6 +52,9 @@
 #define DSCHEEVOS_S_FLAGS         0x1CE // u8: DSCHEEVOS_BOOT_*
 #define DSCHEEVOS_S_UNIX_TIME     0x1D4 // u32: console clock when the launcher wrote the file
 #define DSCHEEVOS_S_NET_VALID     0x1F6 // u8: the game keeps the launcher's Wi-Fi connection
+#define DSCHEEVOS_S_CLOCK         0x1F7 // u8, set here in RAM only: DSCHEEVOS_CLOCK_*
+#define DSCHEEVOS_CLOCK_CPU_133   0x01  // ARM9 at 133 MHz (BOOST_CPU, or DSI_MODE = 2 on a DS game)
+#define DSCHEEVOS_CLOCK_VRAM      0x02  // BOOST_VRAM
 #define DSCHEEVOS_S_AP_SSID       0x210 // char[32]: the access point the launcher joined
 #define DSCHEEVOS_S_AP_SSID_LEN   0x230 // u8
 #define DSCHEEVOS_S_AP_SECURITY   0x238 // u8: 3 = WPA2

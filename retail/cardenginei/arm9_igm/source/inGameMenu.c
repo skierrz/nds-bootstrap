@@ -519,8 +519,10 @@ static void optionsMenu(s32 *mainScreen, u32 consoleModel) {
 	optionsItems[optionsItemCount++] = OPTIONS_VOLUME;
 	if(!dscheevosHc) // DScheevos hardcore: no slow motion
 		optionsItems[optionsItemCount++] = OPTIONS_REFRESH_RATE;
-	optionsItems[optionsItemCount++] = OPTIONS_CLOCK_SPEED;
-	optionsItems[optionsItemCount++] = OPTIONS_VRAM_MODE;
+	if(!dscheevos) { // DScheevos: speed-ups are chosen before launch and kept for the session
+		optionsItems[optionsItemCount++] = OPTIONS_CLOCK_SPEED;
+		optionsItems[optionsItemCount++] = OPTIONS_VRAM_MODE;
+	}
 	#endif
 
 	bool mainScreenChanged = false;

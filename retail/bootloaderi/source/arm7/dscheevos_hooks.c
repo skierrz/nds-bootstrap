@@ -274,6 +274,8 @@ void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* 
 		return;
 	}
 	fillPmk((u8*)session);
+	// the speed the player chose before launch, for the module's status and journal
+	((u8*)session)[DSCHEEVOS_S_CLOCK] = (boostCpu ? DSCHEEVOS_CLOCK_CPU_133 : 0) | (boostVram ? DSCHEEVOS_CLOCK_VRAM : 0);
 
 	if (patchOsHalt(ndsHeader, header[DSCHEEVOS_H_HALT / 4]) == 0) {
 		disable("no OS_Halt");

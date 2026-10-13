@@ -48,6 +48,13 @@ static int readSession(const configuration* conf, u32* head, struct stat* stModu
 	 && age >= -DSCHEEVOS_SESSION_MAX_AHEAD && age <= DSCHEEVOS_SESSION_MAX_AGE;
 }
 
+// A DScheevos session for this ROM will run (hardcore or not).
+int dscheevosSessionPending(const configuration* conf) {
+	u32 head[DSCHEEVOS_SESSION_HEAD / 4];
+	struct stat stModule, stSession;
+	return readSession(conf, head, &stModule, &stSession);
+}
+
 // Hardcore: nds-bootstrap applies only its built-in AP-fix patches
 // (nitro:/apfix.pck), never user files from _nds/nds-bootstrap/apFix/,
 // which could patch the game after the launcher hashed the clean ROM.

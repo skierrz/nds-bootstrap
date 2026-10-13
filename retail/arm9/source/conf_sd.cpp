@@ -183,6 +183,7 @@ extern bool loadPreLoadSettings(configuration* conf, const char* pckPath, const 
 extern void loadAsyncLoadSettings(configuration* conf, const char* romTid, const u16 headerCRC);
 extern void loadApFix(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
 extern "C" int dscheevosHardcorePending(const configuration* conf);
+extern "C" int dscheevosSessionPending(const configuration* conf);
 extern "C" void dscheevosSanitizeSoftReset(const configuration* conf, const char* srParamsPath);
 // extern void loadApFixPostCardRead(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
 extern void loadMobiclipOffsets(configuration* conf, const char* bootstrapPath, const char* romTid, const u8 romVersion, const u16 headerCRC);
@@ -533,6 +534,7 @@ static void load_conf(configuration* conf, const char* fn) {
 			break;
 		default:
 #ifdef DEFAULT_CPU_BOOST
+			conf->boostCpu = true; // before the list: a game on it stays at 67 MHz
 			// TODO: If the list gets large enough, switch to bsearch().
 			for (unsigned int i = 0; i < sizeof(twlClockExcludeList)/sizeof(twlClockExcludeList[0]); i++) {
 				if (memcmp(gameTid, twlClockExcludeList[i], 3) == 0) {
@@ -542,7 +544,6 @@ static void load_conf(configuration* conf, const char* fn) {
 					break;
 				}
 			}
-			conf->boostCpu = true;
 #else
 			conf->boostCpu = false;
 #endif
@@ -1034,6 +1035,28 @@ int loadFromSD(configuration* conf, const char *bootstrapPath) {
 					|| (unitCode == 2 && conf->dsiMode && romTid[0] == 'K')));
 	if (conf->isDSiWare && (totalRomSize >= 0x04000000 || conf->dsiWareSlot1Mode || !scfgSdmmcEnabled || !isDSiMode())) {
 		conf->valueBits4 |= BIT(0);
+	}
+	if (dscheevosSessionPending(conf)) {
+		// DScheevos: the player's speed-ups, chosen before launch, stay for the
+		// session (the in-game menu hides them). DSI_MODE = 2 on a DS game is
+		// its TWL clock, so it counts as the CPU boost (the game runs in DS
+		// mode, which achievements need), and a game nds-bootstrap lists as
+		// broken at 133 MHz stays at 67 MHz whatever was chosen.
+		if (unitCode == 0 && conf->dsiMode == 2) {
+			conf->dsiMode = 0;
+			conf->boostCpu = true;
+		}
+		for (unsigned int i = 0; i < sizeof(twlClockExcludeList)/sizeof(twlClockExcludeList[0]); i++) {
+			if (memcmp(romTid, twlClockExcludeList[i], 3) == 0) {
+				conf->boostCpu = false;
+				break;
+			}
+		}
+		if (conf->boostCpu) {
+			conf->valueBits3 |= BIT(0);
+		} else {
+			conf->valueBits3 &= ~BIT(0);
+		}
 	}
 	if (conf->useSdk20Donor && dscheevosHardcorePending(conf)) {
 		// DScheevos hardcore: no ARM7 binary from a user-chosen donor ROM (it

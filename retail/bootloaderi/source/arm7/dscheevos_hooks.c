@@ -186,9 +186,9 @@ static void placard(void) {
 	toncset16(PLACARD, PLACARD_BG, 256*192);
 	placardText(6, "RetroAchievements", PLACARD_GOLD);
 	placardText(9, s->gameTitle, PLACARD_WHITE);
-	placardText(12, s->hardcore ? "HARDCORE" : "Softcore", s->hardcore ? PLACARD_RED : PLACARD_BLUE);
+	placardText(12, s->hardcore ? "HARDCORE" : "Casual", s->hardcore ? PLACARD_RED : PLACARD_BLUE);
 	if (s->hardcore == DSCHEEVOS_HARDCORE_REFUSED) {
-		placardText(13, "Rules on, RA counts as softcore", PLACARD_GRAY);
+		placardText(13, "Rules on, RA counts as Casual", PLACARD_GRAY);
 	}
 	char line[48];
 	char* p = placardNum(line, s->achievementsUnlocked);

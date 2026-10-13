@@ -51,6 +51,31 @@ int dscheevosHardcorePending(const configuration* conf) {
 	return readSession(conf, head, &stModule, &stSession) && ((const u8*)head)[DSCHEEVOS_S_HARDCORE];
 }
 
+// softResetParams.bin is how a reset that reboots the console hands over to
+// the next boot. Two of its words make that boot run code the launcher never
+// hashed: 'LOAD' at 8 boots ARM9/ARM7 binaries from pagefile.sys (a
+// downloaded DS Download Play child), and a ROM offset at 0xC boots another
+// SRL inside the ROM file. A DScheevos session always starts fresh from the
+// launcher (each reboot goes through it and starts a new session), so a
+// hardcore boot clears both before nds-bootstrap reads them; the game then
+// starts from its own binaries. The reset parameters and boot info stay.
+void dscheevosSanitizeSoftReset(const configuration* conf, const char* srParamsPath) {
+	if (!dscheevosHardcorePending(conf)) {
+		return;
+	}
+	FILE* f = fopen(srParamsPath, "rb+");
+	if (!f) {
+		return;
+	}
+	u32 words[4] = {0};
+	if (fread(words, 1, sizeof(words), f) == sizeof(words) && (words[2] == 0x44414F4C || words[3] != 0)) { // 'LOAD'
+		const u32 zero[2] = {0, 0};
+		fseek(f, 8, SEEK_SET);
+		fwrite(zero, 1, sizeof(zero), f);
+	}
+	fclose(f);
+}
+
 void dscheevosFindSession(configuration* conf) {
 	conf->dscheevosModuleCluster = 0;
 	conf->dscheevosSessionCluster = 0;

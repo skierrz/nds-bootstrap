@@ -182,6 +182,7 @@ extern bool extension(const std::string& filename, const char* ext);
 extern bool loadPreLoadSettings(configuration* conf, const char* pckPath, const char* romTid, const u16 headerCRC);
 extern void loadAsyncLoadSettings(configuration* conf, const char* romTid, const u16 headerCRC);
 extern void loadApFix(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
+extern "C" void dscheevosSanitizeSoftReset(const configuration* conf, const char* srParamsPath);
 // extern void loadApFixPostCardRead(configuration* conf, const char* bootstrapPath, const char* romTid, const u16 headerCRC);
 extern void loadMobiclipOffsets(configuration* conf, const char* bootstrapPath, const char* romTid, const u8 romVersion, const u16 headerCRC);
 extern void loadDSi2DSSavePatch(configuration* conf, const char* bootstrapPath, const char* romTid, const u8 romVersion, const u16 headerCRC);
@@ -2634,6 +2635,7 @@ int loadFromSD(configuration* conf, const char *bootstrapPath) {
 		fputc('\0', srParamsFile);
 		fclose(srParamsFile);
 	}
+	dscheevosSanitizeSoftReset(conf, srParamsFilePath.c_str());
 
 	conf->donorFileOffset = 0;
 

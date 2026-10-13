@@ -79,6 +79,7 @@
 
 extern bool dscheevosWanted(void);
 extern bool dscheevosNetWanted(void);
+extern bool dscheevosHardcore(void);
 extern void dscheevosSetup(cardengineArm7* ce7, cardengineArm9* ce9, const tNDSHeader* ndsHeader);
 
 //#define memcpy __builtin_memcpy
@@ -1811,7 +1812,8 @@ int arm7_main(void) {
 	getFileFromCluster(&patchOffsetCacheFile, patchOffsetCacheFileCluster, gameOnFlashcard);
 	fileRead((char*)&patchOffsetCache, &patchOffsetCacheFile, 0, 4);
 	if (patchOffsetCache.ver == patchOffsetCacheFileVersion
-	 && patchOffsetCache.type == 0) {	// 0 = Regular, 1 = B4DS, 2 = HB
+	 && patchOffsetCache.type == 0	// 0 = Regular, 1 = B4DS, 2 = HB
+	 && !dscheevosHardcore()) {	// DScheevos hardcore: the offsets are anyone's, find them again
 		fileRead((char*)&patchOffsetCache, &patchOffsetCacheFile, 0, sizeof(patchOffsetCacheContents));
 	} else {
 		if (srlAddr == 0 && (!isDSiWare || dsiWareAsSlot1)) pleaseWaitOutput();

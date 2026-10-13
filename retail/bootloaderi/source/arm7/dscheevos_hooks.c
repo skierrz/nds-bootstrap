@@ -51,6 +51,22 @@ bool dscheevosNetWanted(void) {
 	return cached;
 }
 
+// A hardcore session: the bootloader trusts nothing on the SD card that
+// changes the game (see the patch offset cache in main.arm7.c).
+bool dscheevosHardcore(void) {
+	static int cached = -1;
+	if (cached < 0) {
+		u8 hardcore = 0;
+		if (dscheevosWanted()) {
+			aFile file;
+			getFileFromCluster(&file, dscheevosSessionCluster, false);
+			fileRead((char*)&hardcore, &file, DSCHEEVOS_S_HARDCORE, 1);
+		}
+		cached = hardcore ? 1 : 0;
+	}
+	return cached;
+}
+
 // NitroSDK OS_Halt: mov r0, #0; mcr p15, 0, r0, c7, c0, 4; bx lr
 static int patchOsHalt(const tNDSHeader* ndsHeader, u32 haltEntry) {
 	u32* p = (u32*)ndsHeader->arm9destination;

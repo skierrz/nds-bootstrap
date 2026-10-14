@@ -176,7 +176,13 @@ extern void resetMpu(void);
 void reset(u32 param, u32 tid2) {
 #ifndef TWLSDK
 	if (ce9->valueBits & DSCHEEVOS_VALUEBIT) {
-		// DScheevos: achievement state resets with the game
+		// DScheevos: the frames still queued are evaluated first (the ARM7
+		// copies the journal at the reset; 0 or out of range in older modules),
+		// then achievement state resets with the game
+		const u32 flush = *(u32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_FLUSH);
+		if (flush > DSCHEEVOS_LOCATION && flush < DSCHEEVOS_LOCATION + DSCHEEVOS_IMAGE_MAX) {
+			(*(void (*)(void))flush)();
+		}
 		(*(void (**)(void))(DSCHEEVOS_LOCATION + DSCHEEVOS_H_RESET))();
 	}
 #endif

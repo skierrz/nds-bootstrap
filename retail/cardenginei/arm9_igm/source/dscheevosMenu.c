@@ -58,6 +58,20 @@ static const DScheevosNotices* dscheevosNotices(void) {
 	return (n && n->magic == DSCHEEVOS_NOTICES_MAGIC) ? n : NULL;
 }
 
+// The game is stopped and the ARM7 is about to copy the journal: let the module
+// evaluate the frames still queued first, so an unlock in the last moments is
+// in it. The module skips this itself if its idle work is running or parked.
+void dscheevosFlush(void) {
+	if (*(u32*)DSCHEEVOS_LOCATION != DSCHEEVOS_MAGIC) {
+		return;
+	}
+	const u32 f = *(u32*)(DSCHEEVOS_LOCATION + DSCHEEVOS_H_FLUSH);
+	if (f <= DSCHEEVOS_LOCATION || f >= DSCHEEVOS_LOCATION + DSCHEEVOS_IMAGE_MAX) {
+		return;    // an older module: no flush entry
+	}
+	(*(void (*)(void))f)();
+}
+
 bool dscheevosHardcore(void) {
 	const DScheevosStatus* s = dscheevosStatus();
 	return s && s->hardcore;

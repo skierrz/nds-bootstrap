@@ -31,6 +31,7 @@
 #define DSCHEEVOS_H_STATUS        0x1C
 #define DSCHEEVOS_H_VBLANK_COUNT  0x24
 #define DSCHEEVOS_H_RESET         0x28
+#define DSCHEEVOS_H_FLUSH         0x38  // ARM code: evaluate the frames still queued (game stopped), before a journal copy; 0 in older modules
 #define DSCHEEVOS_H_LIST          0x2C  // DScheevosList*, 0 until the set is loaded; swapped whole after a rebuild
 #define DSCHEEVOS_H_NOTICES       0x30  // DScheevosNotices*
 #define DSCHEEVOS_H_JOURNAL       0x34  // DScheevosJournal*, kept current in RAM (the ARM7 reads it directly)

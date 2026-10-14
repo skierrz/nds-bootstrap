@@ -470,6 +470,7 @@ static void drawCursor(u8 line) {
 
 #ifndef B4DS
 extern bool dscheevosHardcore(void);
+extern void dscheevosFlush(void);
 extern void dscheevosMenu(void);
 static bool dscheevos = false;
 static bool dscheevosHc = false;
@@ -972,6 +973,7 @@ u32 inGameMenu(s32 *mainScreen, u32 consoleModel, s32 *exceptionRegisters) {
 			while (REG_VCOUNT == 191) mySwiDelay(100);
 		}
 		if (sharedAddr[4] == 0x554E454D) {
+			dscheevosFlush(); // queued frames into the journal first
 			sharedAddr[4] = 0x4A435344; // DSCJ
 			while (sharedAddr[4] == 0x4A435344) {
 				while (REG_VCOUNT != 191) mySwiDelay(100);
